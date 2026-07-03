@@ -880,16 +880,15 @@ def compute_resilience_report(params, materials):
     }
 
 
-import math
-import json
+
 
 import math
 import json
-import math
-import json
+
 
 import math
 import json
+
 
 def create_construction_3d(L, W, H, roof_pitch,
                            window_count=4,
@@ -902,7 +901,13 @@ def create_construction_3d(L, W, H, roof_pitch,
                            window_width=2.5, window_height=2.0,
                            window_spacing=0.0,
                            seismic_zone=8, wind_kPa=0.4, snow_kg_m2=50.0,
-                           column_utilization=50.0, foundation_utilization=50.0, column_spacing=8.5):
+                           column_utilization=50.0, foundation_utilization=50.0, column_spacing=8.5,
+                           construction_system="LMK (Yengil Metall)"):
+
+    # ===== KONSTRUKSIYA TURI: LSTK bo'lsa tom profili to'rtburchak (rect) bo'ladi =====
+    is_lstk = "LSTK" in (construction_system or "")
+    construction_system_js = json.dumps(construction_system or "")
+    is_lstk_js = "true" if is_lstk else "false"
 
     pitch_rad = math.radians(roof_pitch)
     ridge_height = H + (W / 2) * math.tan(pitch_rad) if roof_pitch > 0 and W > 0 else H
@@ -1074,20 +1079,6 @@ def create_construction_3d(L, W, H, roof_pitch,
     position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
     background:#bcd6ea; z-index:99999; color:#1c3a52; font-size:16px; letter-spacing:1px;
   }}
-  .drag-marker {{
-    position:fixed; width:14px; height:14px; border-radius:50%;
-    background:#ff5722; border:2px solid #fff; cursor:grab;
-    z-index:99999; box-shadow:0 2px 8px rgba(0,0,0,0.3);
-    pointer-events:all; transform:translate(-50%, -50%);
-  }}
-  .drag-marker:hover {{ transform:translate(-50%, -50%) scale(1.2); }}
-  .drag-marker.door {{ background:#2196F3; }}
-  .drag-marker.window {{ background:#4CAF50; }}
-  .drag-label {{
-    position:fixed; font-size:8px; color:#fff; background:rgba(0,0,0,0.7);
-    padding:2px 6px; border-radius:3px; pointer-events:none;
-    white-space:nowrap; transform:translate(-50%, -24px); z-index:99999;
-  }}
   canvas {{ display:block !important; width:100% !important; height:100% !important; }}
   .css2d-renderer {{
     position:fixed !important; top:0 !important; left:0 !important;
@@ -1148,7 +1139,7 @@ def create_construction_3d(L, W, H, roof_pitch,
 </div>
 
 <div id="quakeResult"></div>
-<div id="hint">Rotate: LMB | Pan: RMB | Zoom: Wheel | Drag: "Drag" button</div>
+<div id="hint">Rotate: LMB | Pan: RMB | Zoom: Wheel | Drag: "Drag" tugmasini yoqing, eshik ustiga kelib torting</div>
 
 <div id="info-panel">
   <h4>Building Parameters</h4>
@@ -1159,6 +1150,7 @@ def create_construction_3d(L, W, H, roof_pitch,
   <div class="row"><span>Ridge Height</span><span class="val">{ridge_height:.2f} m</span></div>
   <div class="row"><span>Columns</span><span class="val">{n_cols_x}x{n_cols_z}</span></div>
   <div class="row"><span>Windows</span><span class="val">{window_count}</span></div>
+  <div class="row"><span>Konstruksiya</span><span class="val">{construction_system}</span></div>
   <div class="row"><span>Seismic Zone</span><span class="val">{seismic_zone}</span></div>
   <div class="row"><span>Column Utilization</span><span class="val">{column_utilization:.1f}%</span></div>
   <div class="row"><span>Foundation Utilization</span><span class="val">{foundation_utilization:.1f}%</span></div>
@@ -1213,6 +1205,9 @@ const RIDGE_H = {ridge_height};
 const PITCH_RISE = {pitch_rise};
 const IS_PITCHED = PITCH_DEG > 0.5;
 const HALF_W = W / 2;
+
+const CONSTRUCTION_SYSTEM = {construction_system_js};
+const IS_LSTK = {is_lstk_js};
 
 const DOOR_FRONT_COUNT = {door_front_count};
 const DOOR_FRONT_W = {door_front_width};
@@ -1296,15 +1291,50 @@ controls.minDistance = 2;
 controls.maxPolarAngle = Math.PI * 0.495;
 
 // ============================================================
+// MUHIT: OSMON GRADIENTI + TUMAN + AKS ETISH (IMAGE-BASED LIGHTING)
+// Bu qism metall/oyna sirtlarga tabiiy osmon aksini, umumiy sahnaga esa
+// chuqurlik (atmosferik perspektiva) hissini beradi - fotorealistik ko'rinish uchun muhim.
+// ============================================================
+function makeSkyEquirectTexture() {{
+  const c = document.createElement('canvas');
+  c.width = 2; c.height = 512;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0.00, '#5b93c9');
+  grad.addColorStop(0.38, '#9cc3e0');
+  grad.addColorStop(0.52, '#cfe4f2');
+  grad.addColorStop(0.63, '#dfe9dc');
+  grad.addColorStop(1.00, '#8f9a7c');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 2, 512);
+  const tex = new THREE.CanvasTexture(c);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}}
+
+const skyBgTexture = makeSkyEquirectTexture();
+scene.background = skyBgTexture;
+
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+const skyEnvSource = makeSkyEquirectTexture();
+const envRT = pmremGenerator.fromEquirectangular(skyEnvSource);
+scene.environment = envRT.texture;
+skyEnvSource.dispose();
+pmremGenerator.dispose();
+
+scene.fog = new THREE.Fog(0xcfe4f2, Math.max(L, W, H) * 2.4, Math.max(L, W, H) * 12);
+
+// ============================================================
 // YORUG'LIK
 // ============================================================
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
 scene.add(ambientLight);
 
-const hemi = new THREE.HemisphereLight(0x87CEEB, 0x8a7a6a, 0.7);
+const hemi = new THREE.HemisphereLight(0x87CEEB, 0x8a7a6a, 0.45);
 scene.add(hemi);
 
-const sun = new THREE.DirectionalLight(0xffeedd, 2.8);
+const sun = new THREE.DirectionalLight(0xffeedd, 2.4);
 sun.position.set(Math.max(L, 20) * 0.8, Math.max(RIDGE_H, 10) * 3.0, Math.max(W, 20) * 0.6);
 sun.castShadow = true;
 sun.shadow.mapSize.width = 2048;
@@ -1319,25 +1349,25 @@ sun.shadow.bias = -0.0003;
 sun.shadow.normalBias = 0.02;
 scene.add(sun);
 
-const fillLight = new THREE.DirectionalLight(0x88bbff, 0.8);
+const fillLight = new THREE.DirectionalLight(0x88bbff, 0.5);
 fillLight.position.set(-Math.max(L, 10), H * 2.0, -Math.max(W, 10));
 scene.add(fillLight);
 
-const interiorLight = new THREE.PointLight(0xfff4e0, 2.0, Math.max(L, W, H) * 3.0);
+const interiorLight = new THREE.PointLight(0xfff4e0, 1.6, Math.max(L, W, H) * 3.0);
 interiorLight.position.set(L/2, H * 0.8, W/2);
 scene.add(interiorLight);
 
 // ============================================================
 // MATERIAL
 // ============================================================
-const matSteel    = new THREE.MeshStandardMaterial({{ color:0x8a93a0, metalness:0.6, roughness:0.3 }});
-const matBeam     = new THREE.MeshStandardMaterial({{ color:0x6a7380, metalness:0.7, roughness:0.25 }});
-const matBeamWeb  = new THREE.MeshStandardMaterial({{ color:0x7a8390, metalness:0.6, roughness:0.3 }});
-const matPanel    = new THREE.MeshStandardMaterial({{ color:0xe8ebe5, roughness:0.5, metalness:0.05 }});
-const matPanelDouble = new THREE.MeshStandardMaterial({{ color:0xe8ebe5, roughness:0.5, metalness:0.05, side:THREE.DoubleSide }});
-const matPanelTrim= new THREE.MeshStandardMaterial({{ color:0x4a5a6a, roughness:0.3, metalness:0.5 }});
-const matRoof     = new THREE.MeshStandardMaterial({{ color:0x8a9aa8, metalness:0.3, roughness:0.5, side:THREE.DoubleSide }});
-const matRidge    = new THREE.MeshStandardMaterial({{ color:0x4a5a6a, metalness:0.7, roughness:0.25 }});
+const matSteel    = new THREE.MeshStandardMaterial({{ color:0x8a93a0, metalness:0.6, roughness:0.32, envMapIntensity:0.75 }});
+const matBeam     = new THREE.MeshStandardMaterial({{ color:0x6a7380, metalness:0.7, roughness:0.28, envMapIntensity:0.8 }});
+const matBeamWeb  = new THREE.MeshStandardMaterial({{ color:0x7a8390, metalness:0.6, roughness:0.32, envMapIntensity:0.75 }});
+const matPanel    = new THREE.MeshStandardMaterial({{ color:0xe8ebe5, roughness:0.5, metalness:0.05, envMapIntensity:0.4 }});
+const matPanelDouble = new THREE.MeshStandardMaterial({{ color:0xe8ebe5, roughness:0.5, metalness:0.05, side:THREE.DoubleSide, envMapIntensity:0.4 }});
+const matPanelTrim= new THREE.MeshStandardMaterial({{ color:0x4a5a6a, roughness:0.32, metalness:0.5, envMapIntensity:0.7 }});
+const matRoof     = new THREE.MeshStandardMaterial({{ color:0x8a9aa8, metalness:0.3, roughness:0.5, side:THREE.DoubleSide, envMapIntensity:0.6 }});
+const matRidge    = new THREE.MeshStandardMaterial({{ color:0x4a5a6a, metalness:0.7, roughness:0.28, envMapIntensity:0.75 }});
 
 const matGlass    = new THREE.MeshPhysicalMaterial({{
   color: 0x88ccdd,
@@ -1346,18 +1376,193 @@ const matGlass    = new THREE.MeshPhysicalMaterial({{
   roughness: 0.05,
   metalness: 0.0,
   side: THREE.DoubleSide,
+  envMapIntensity: 1.4,
+  clearcoat: 0.6,
+  clearcoatRoughness: 0.1,
 }});
 
-const matFrame    = new THREE.MeshStandardMaterial({{ color: 0x8a9aa8, roughness: 0.2, metalness: 0.4 }});
+const matFrame    = new THREE.MeshStandardMaterial({{ color: 0x8a9aa8, roughness: 0.22, metalness: 0.4, envMapIntensity:0.8 }});
 
-const matConcrete = new THREE.MeshStandardMaterial({{ color:0xc8cacb, roughness:0.9, metalness:0.0 }});
-const matDoorPanel= new THREE.MeshStandardMaterial({{ color:0x6a7a8a, metalness:0.4, roughness:0.4 }});
-const matDoorFrame= new THREE.MeshStandardMaterial({{ color:0x8a8a8a, metalness:0.4, roughness:0.4 }});
-const matGround   = new THREE.MeshStandardMaterial({{ color:0xbec9b0, roughness:0.95, metalness:0.0 }});
-const matCorrugated = new THREE.MeshStandardMaterial({{ color:0xccd2d8, roughness:0.5, metalness:0.1, side:THREE.DoubleSide }});
-const matGusset   = new THREE.MeshStandardMaterial({{ color:0x5a6a7a, metalness:0.5, roughness:0.4 }});
-const matBolt     = new THREE.MeshStandardMaterial({{ color:0x3a4a5a, metalness:0.5, roughness:0.5 }});
+const matConcrete = new THREE.MeshStandardMaterial({{ color:0xc8cacb, roughness:0.9, metalness:0.0, envMapIntensity:0.3 }});
+const matDoorPanel= new THREE.MeshStandardMaterial({{ color:0x6a7a8a, metalness:0.4, roughness:0.4, envMapIntensity:0.6 }});
+const matDoorFrame= new THREE.MeshStandardMaterial({{ color:0x8a8a8a, metalness:0.4, roughness:0.4, envMapIntensity:0.6 }});
+const matGround   = new THREE.MeshStandardMaterial({{ color:0xa8a196, roughness:0.95, metalness:0.0, envMapIntensity:0.25 }});
+const matCorrugated = new THREE.MeshStandardMaterial({{ color:0xccd2d8, roughness:0.5, metalness:0.1, side:THREE.DoubleSide, envMapIntensity:0.7 }});
+const matGusset   = new THREE.MeshStandardMaterial({{ color:0x5a6a7a, metalness:0.5, roughness:0.4, envMapIntensity:0.7 }});
+const matBolt     = new THREE.MeshStandardMaterial({{ color:0x3a4a5a, metalness:0.5, roughness:0.5, envMapIntensity:0.85 }});
 
+// ============================================================
+// PROSEDURAL TEKSTURALAR — real metall/beton/o't ko'rinishi uchun
+// (mayda shovqin, zang izlari, rebro soyalari, tuproq dog'lari)
+// ============================================================
+function makeNoiseCanvas(size, baseColor, variation) {{
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  const [r0, g0, b0] = baseColor;
+  for (let i = 0; i < size * size; i++) {{
+    const n = (Math.random() - 0.5) * variation;
+    img.data[i*4+0] = Math.min(255, Math.max(0, r0 + n));
+    img.data[i*4+1] = Math.min(255, Math.max(0, g0 + n));
+    img.data[i*4+2] = Math.min(255, Math.max(0, b0 + n));
+    img.data[i*4+3] = 255;
+  }}
+  ctx.putImageData(img, 0, 0);
+  return c;
+}}
+
+function makeTiledTexture(canvas, repeatX, repeatY, isColorMap) {{
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeatX, repeatY);
+  if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {{
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  }}
+  if (isColorMap) tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}}
+
+// ============================================================
+// SENDVICH-PANEL TEKSTURASI — tom va devor uchun BIR XIL uslub
+// (trapetsiyasimon rebro, panel choklari, vint boshchalari).
+// Faqat rang tusi farq qiladi, ko'rinish uslubi bir xil bo'ladi.
+// ============================================================
+function makeSandwichPanelCanvas(baseHex, highlightHex, shadowHex, seamHex) {{
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+
+  // Baza rang
+  ctx.fillStyle = baseHex;
+  ctx.fillRect(0, 0, size, size);
+
+  // Trapetsiyasimon rebrolar — har biri yorug' va soyali chiziq juftligi
+  const ribCount = 6;
+  const ribW = size / ribCount;
+  for (let i = 0; i < ribCount; i++) {{
+    const x = i * ribW;
+    ctx.fillStyle = highlightHex;
+    ctx.globalAlpha = 0.28;
+    ctx.fillRect(x + ribW * 0.06, 0, ribW * 0.20, size);
+    ctx.fillStyle = shadowHex;
+    ctx.globalAlpha = 0.24;
+    ctx.fillRect(x + ribW * 0.60, 0, ribW * 0.20, size);
+    ctx.globalAlpha = 1.0;
+  }}
+
+  // Mayda shovqin — yangi bo'yalgan/sinklangan metall hissi (kam, toza ko'rinish uchun)
+  const img = ctx.getImageData(0, 0, size, size);
+  for (let i = 0; i < img.data.length; i += 4) {{
+    const n = (Math.random() - 0.5) * 6;
+    img.data[i]   = Math.min(255, Math.max(0, img.data[i]   + n));
+    img.data[i+1] = Math.min(255, Math.max(0, img.data[i+1] + n));
+    img.data[i+2] = Math.min(255, Math.max(0, img.data[i+2] + n));
+  }}
+  ctx.putImageData(img, 0, 0);
+
+  // Panel choki (yuqori/pastki chegara) — sendvich panellar orasidagi bo'g'in chizig'i
+  ctx.globalAlpha = 1.0;
+  ctx.fillStyle = seamHex;
+  ctx.fillRect(0, 0, size, 3);
+  ctx.fillRect(0, size - 3, size, 3);
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(0, 3, size, 2);
+  ctx.fillRect(0, size - 6, size, 2);
+
+  // Vint boshchalari — panel chokiga qatorlab joylashgan
+  const screwCount = 8;
+  ctx.fillStyle = 'rgba(55,60,66,0.55)';
+  for (let i = 0; i < screwCount; i++) {{
+    const x = (i + 0.5) * (size / screwCount);
+    ctx.beginPath(); ctx.arc(x, 1.5, 1.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, size - 1.5, 1.4, 0, Math.PI * 2); ctx.fill();
+  }}
+
+  return c;
+}}
+
+function makeGroundCanvas() {{
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#a8a196';
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 3500; i++) {{
+    const x = Math.random() * size, y = Math.random() * size;
+    const shade = 95 + Math.random() * 70;
+    ctx.fillStyle = `rgba(${{Math.round(shade)}}, ${{Math.round(shade*0.94)}}, ${{Math.round(shade*0.86)}}, 0.5)`;
+    ctx.fillRect(x, y, 1.6, 1.6);
+  }}
+  for (let i = 0; i < 6; i++) {{
+    const x = Math.random() * size, y = Math.random() * size, r = 10 + Math.random() * 22;
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, 'rgba(90,84,72,0.30)');
+    grad.addColorStop(1, 'rgba(90,84,72,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+  }}
+  return c;
+}}
+
+// --- Tom VA devor uchun BIR XIL sendvich-panel uslubi (faqat rang tusi farqlanadi) ---
+const roofBaseHex      = IS_LSTK ? '#cdd6dc' : '#9aa8b1';
+const roofHighlightHex = IS_LSTK ? '#f2f6f8' : '#c3cdd3';
+const roofShadowHex    = IS_LSTK ? '#a4b0b8' : '#7e8b95';
+const roofSeamHex      = IS_LSTK ? '#7c8890' : '#5b6570';
+const roofRepeatX = Math.max(2, Math.round(L / 2.4));
+const roofColorTex = makeTiledTexture(makeSandwichPanelCanvas(roofBaseHex, roofHighlightHex, roofShadowHex, roofSeamHex), roofRepeatX, 3, true);
+const roofRoughTex  = makeTiledTexture(makeNoiseCanvas(128, [130,130,130], 30), roofRepeatX, 3, false);
+matCorrugated.map = roofColorTex;
+matCorrugated.roughnessMap = roofRoughTex;
+matCorrugated.color.set(0xffffff);
+matCorrugated.roughness = 1.0;
+matCorrugated.metalness = IS_LSTK ? 0.55 : 0.25;
+
+const wallBaseHex      = '#eef0ea';
+const wallHighlightHex = '#ffffff';
+const wallShadowHex    = '#c7cbc2';
+const wallSeamHex      = '#aab0a6';
+const wallRepeatX = Math.max(2, Math.round(L / 3));
+const wallRepeatY = Math.max(1, Math.round(H / 2.4));
+const wallColorTex = makeTiledTexture(makeSandwichPanelCanvas(wallBaseHex, wallHighlightHex, wallShadowHex, wallSeamHex), wallRepeatX, wallRepeatY, true);
+const wallRoughTex  = makeTiledTexture(makeNoiseCanvas(128, [150,150,150], 25), wallRepeatX, wallRepeatY, false);
+matPanelDouble.map = wallColorTex;
+matPanelDouble.roughnessMap = wallRoughTex;
+matPanelDouble.color.set(0xffffff);
+matPanelDouble.roughness = 1.0;
+matPanel.map = wallColorTex;
+matPanel.color.set(0xffffff);
+matPanel.roughness = 1.0;
+
+// --- Beton teksturasi (fundament platforma) ---
+const concreteColorTex = makeTiledTexture(makeNoiseCanvas(256, [198, 197, 192], 22), 6, 6, true);
+const concreteRoughTex  = makeTiledTexture(makeNoiseCanvas(256, [200,200,200], 40), 6, 6, false);
+matConcrete.map = concreteColorTex;
+matConcrete.roughnessMap = concreteRoughTex;
+matConcrete.color.set(0xffffff);
+matConcrete.roughness = 1.0;
+
+// --- O't/tuproq teksturasi (yer maydoni) ---
+const groundSizeM = Math.max(L, W) * 4;
+const groundRepeat = Math.max(4, Math.round(groundSizeM / 3));
+const groundColorTex = makeTiledTexture(makeGroundCanvas(), groundRepeat, groundRepeat, true);
+const groundRoughTex  = makeTiledTexture(makeNoiseCanvas(128, [210,210,210], 60), groundRepeat, groundRepeat, false);
+matGround.map = groundColorTex;
+matGround.roughnessMap = groundRoughTex;
+matGround.color.set(0xffffff);
+matGround.roughness = 1.0;
+
+
+
+// ============================================================
+// TOM/DEVOR PROFIL GEOMETRIYASI
+// LSTK tanlanganda -> to'rtburchak (kvadrat to'lqin) profil
+// Aks holda (LMK / OG'IR METALL) -> silliq sinusoidal (klassik) profil
+// ============================================================
 function makeCorrugatedPanelGeometry(width, height, corrugateAxis) {{
   const ampl = 0.02;
   let segW, segH;
@@ -1380,6 +1585,51 @@ function makeCorrugatedPanelGeometry(width, height, corrugateAxis) {{
   return geo;
 }}
 
+// To'rtburchak (rectangular / trapezoidal box-rib) profil - LSTK tom listlari uchun
+function makeRectCorrugatedPanelGeometry(width, height, corrugateAxis) {{
+  const ampl = 0.022;       // rebro balandligi
+  const ribPeriod = 0.20;   // bir rebro davri (metr)
+  const flatRatio = 0.55;   // davrning tekis (top/bottom) qismi ulushi
+  let segW, segH;
+  if (corrugateAxis === 'height') {{ segW = 1; segH = Math.max(24, Math.round(height / (ribPeriod / 6))); }}
+  else {{ segW = Math.max(24, Math.round(width / (ribPeriod / 6))); segH = 1; }}
+  const geo = new THREE.PlaneGeometry(width, height, segW, segH);
+  const pos = geo.attributes.position;
+  function rectWave(t, length) {{
+    // t: -length/2 .. length/2 dagi lokal koordinata
+    const phase = ((t / ribPeriod) % 1 + 1) % 1; // 0..1
+    if (phase < flatRatio / 2) return ampl;
+    if (phase < 0.5 - flatRatio / 4) {{
+      const k = (phase - flatRatio / 2) / (0.5 - flatRatio / 2 - flatRatio / 4);
+      return ampl - 2 * ampl * Math.min(1, Math.max(0, k));
+    }}
+    if (phase < 0.5 + flatRatio / 2) return -ampl;
+    if (phase < 1 - flatRatio / 4) {{
+      const k = (phase - (0.5 + flatRatio / 2)) / (0.5 - flatRatio / 2 - flatRatio / 4);
+      return -ampl + 2 * ampl * Math.min(1, Math.max(0, k));
+    }}
+    return ampl;
+  }}
+  for (let i = 0; i < pos.count; i++) {{
+    let wave;
+    if (corrugateAxis === 'height') {{
+      wave = rectWave(pos.getY(i) + height / 2, height);
+    }} else {{
+      wave = rectWave(pos.getX(i) + width / 2, width);
+    }}
+    pos.setZ(i, pos.getZ(i) + wave);
+  }}
+  geo.computeVertexNormals();
+  return geo;
+}}
+
+// Tom uchun tanlangan konstruksiya turiga qarab profil generatori
+function makeRoofPanelGeometry(width, height, corrugateAxis) {{
+  return IS_LSTK
+    ? makeRectCorrugatedPanelGeometry(width, height, corrugateAxis)
+    : makeCorrugatedPanelGeometry(width, height, corrugateAxis);
+}}
+
 const groundGeometry = new THREE.PlaneGeometry(Math.max(L, W) * 4, Math.max(L, W) * 4);
 const ground = new THREE.Mesh(groundGeometry, matGround);
 ground.rotation.x = -Math.PI / 2;
@@ -1387,16 +1637,40 @@ ground.position.set(L/2, -0.06, W/2);
 ground.receiveShadow = true;
 scene.add(ground);
 
+// --- Kontakt soya (contact shadow) - binoni yerga "yopishtiradi", real hissi kuchayadi ---
+function makeContactShadowTexture() {{
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createRadialGradient(size/2, size/2, size*0.1, size/2, size/2, size*0.5);
+  grad.addColorStop(0, 'rgba(0,0,0,0.45)');
+  grad.addColorStop(0.7, 'rgba(0,0,0,0.18)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(c);
+}}
+const contactShadowMat = new THREE.MeshBasicMaterial({{
+  map: makeContactShadowTexture(), transparent: true, depthWrite: false, opacity: 0.85,
+}});
+const contactShadow = new THREE.Mesh(new THREE.PlaneGeometry((L + 3) * 1.15, (W + 3) * 1.15), contactShadowMat);
+contactShadow.rotation.x = -Math.PI / 2;
+contactShadow.position.set(L/2, -0.01, W/2);
+scene.add(contactShadow);
+
 const platform = new THREE.Mesh(new THREE.BoxGeometry(L + 1.0, 0.18, W + 1.0), matConcrete);
 platform.position.set(L/2, 0.07, W/2);
 platform.receiveShadow = true;
 platform.castShadow = false;
 scene.add(platform);
 
-const matInteriorFloor = new THREE.MeshStandardMaterial({{ color:0xd6d2c4, roughness:0.85, metalness:0.0 }});
+const floorColorTex = makeTiledTexture(makeNoiseCanvas(256, [214, 210, 196], 14), Math.max(2, Math.round(L / 3)), Math.max(2, Math.round(W / 3)), true);
+const floorRoughTex  = makeTiledTexture(makeNoiseCanvas(128, [190,190,190], 30), Math.max(2, Math.round(L / 3)), Math.max(2, Math.round(W / 3)), false);
+const matInteriorFloor = new THREE.MeshStandardMaterial({{ color:0xffffff, map: floorColorTex, roughnessMap: floorRoughTex, roughness:1.0, metalness:0.0, envMapIntensity:0.35 }});
 const interiorFloor = new THREE.Mesh(new THREE.PlaneGeometry(L - 0.05, W - 0.05), matInteriorFloor);
 interiorFloor.rotation.x = -Math.PI / 2;
-interiorFloor.position.set(L/2, 0.16, W/2);
+interiorFloor.position.set(L/2, 0.175, W/2);
 interiorFloor.receiveShadow = true;
 scene.add(interiorFloor);
 
@@ -1425,7 +1699,9 @@ function makeIBeam(length, material) {{
 function addColumn(x, z) {{
   const col = makeIBeam(H, matBeam);
   col.rotation.x = -Math.PI/2;
-  col.position.set(x - IB_H/2, 0, z - IB_BF/2);
+  // TUZATILDI: profil lokal X (bf-yo'nalish) allaqachon markazlashgan -> offsetsiz "x";
+  // profil lokal Y (IB_H-yo'nalish) dunyoda Z ga aylanadi -> markazlash uchun +IB_H/2
+  col.position.set(x, 0, z + IB_H/2);
   colGroup.add(col);
   const basePlate = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.025, 0.45), matSteel);
   basePlate.position.set(x, 0.025, z);
@@ -1566,7 +1842,7 @@ function buildRoofSlope(fromZ, toZ, fromY, toY) {{
   const dz = toZ - fromZ;
   const dy = toY - fromY;
   const slopeLen = Math.sqrt(dz*dz + dy*dy);
-  const geo = makeCorrugatedPanelGeometry(L, slopeLen, 'width');
+  const geo = makeRoofPanelGeometry(L, slopeLen, 'width');
   const pos = geo.attributes.position;
   const newPos = new Float32Array(pos.count * 3);
   const angle = Math.atan2(dy, dz);
@@ -1595,7 +1871,7 @@ function buildRoofSlope(fromZ, toZ, fromY, toY) {{
 }}
 
 function buildFlatRoofPanel() {{
-  const geo = makeCorrugatedPanelGeometry(L, W, 'width');
+  const geo = makeRoofPanelGeometry(L, W, 'width');
   const pos = geo.attributes.position;
   const newPos = new Float32Array(pos.count * 3);
   for (let i = 0; i < pos.count; i++) {{
@@ -1649,6 +1925,8 @@ buildingGroup.add(roofGroup);
 const wallGroup = new THREE.Group();
 const windowGroup = new THREE.Group();
 const doorGroup = new THREE.Group();
+const doorHitGroup = new THREE.Group();
+let doorHitboxes = [];           // [{{ mesh, wall, index }}] — buildAllWalls()dan OLDIN e'lon qilinishi SHART
 const T = 0.12;
 
 let wallSegments = [];
@@ -1788,7 +2066,11 @@ function addGirtSegments(totalLength, gh, axis, fixedCoord, normalSign, baseX_or
 }}
 
 // ============================================================
-// DEVORLARNI QURISH - TUZATILGAN
+// EARTHQUAKE (state — girt/wall/door helper funksiyalaridan keyin, drag funksiyalaridan oldin kerak)
+// ============================================================
+
+// ============================================================
+// DEVOR VA EShIKLARNI QURISH
 // ============================================================
 function buildAllWalls() {{
   while(wallGroup.children.length > 0) wallGroup.remove(wallGroup.children[0]);
@@ -1942,12 +2224,15 @@ function buildAllWalls() {{
     doorFrameOuter.position.set(L + T/2 + 0.01, dh/2, doorZ);
     doorGroup.add(doorFrameOuter);
   }});
+
+  rebuildDoorHitboxes();
 }}
 
 buildAllWalls();
 buildingGroup.add(wallGroup);
 buildingGroup.add(windowGroup);
 buildingGroup.add(doorGroup);
+buildingGroup.add(doorHitGroup);
 
 // ============================================================
 // WEATHER (qisqartirilgan)
@@ -1972,6 +2257,18 @@ const circleTex = makeCircleTexture();
 
 const WX_MIN = -8, WX_MAX = L + 8, WZ_MIN = -8, WZ_MAX = W + 8;
 const WX_TOP = RIDGE_H + 12;
+
+// Bino "tom sirti" balandligini (x,z) nuqtada qaytaradi. Nuqta bino
+// asosidan tashqarida bo'lsa -Infinity (to'siq yo'q) qaytaradi.
+// Qor/yomg'ir/shamol zarralari shu sirtdan pastga (bino ICHIGA) o'tmasligi uchun ishlatiladi.
+function roofSurfaceY(x, z) {{
+  if (x < 0 || x > L || z < 0 || z > W) return -Infinity;
+  if (IS_PITCHED && HALF_W > 0) {{
+    const t = z <= HALF_W ? (z / HALF_W) : ((W - z) / HALF_W);
+    return H + t * PITCH_RISE + 0.06;
+  }}
+  return H + 0.10;
+}}
 
 function updateParticleCount(geometry, targetCount) {{
   const currentCount = geometry.attributes.position.count;
@@ -2017,7 +2314,8 @@ function updateSnow(dt) {{
   for (let i = 0; i < count; i++) {{
     pos[i*3+1] -= snowVelArr[i % snowVelArr.length] * dt * 6 * fallMult;
     pos[i*3]   += Math.sin(performance.now()*0.0005 + i) * 0.015 + WEATHER.windSpeed * dt * 0.25;
-    if (pos[i*3+1] < 0) {{
+    const hitRoof = pos[i*3+1] <= roofSurfaceY(pos[i*3], pos[i*3+2]);
+    if (pos[i*3+1] < 0 || hitRoof) {{
       pos[i*3+1] = WX_TOP;
       pos[i*3]   = WX_MIN + Math.random() * (WX_MAX - WX_MIN);
       pos[i*3+2] = WZ_MIN + Math.random() * (WZ_MAX - WZ_MIN);
@@ -2050,7 +2348,9 @@ function updateRain(dt) {{
     pos[i*6+1] -= fall; pos[i*6+4] -= fall;
     pos[i*6]   += WEATHER.windSpeed * dt * 0.5;
     pos[i*6+3] += WEATHER.windSpeed * dt * 0.5;
-    if (pos[i*6+1] < 0) {{
+    const tipX = pos[i*6+3], tipY = pos[i*6+4], tipZ = pos[i*6+5];
+    const hitRoof = tipY <= roofSurfaceY(tipX, tipZ);
+    if (tipY < 0 || hitRoof) {{
       const x = WX_MIN + Math.random() * (WX_MAX - WX_MIN);
       const z = WZ_MIN + Math.random() * (WZ_MAX - WZ_MIN);
       pos[i*6]=x; pos[i*6+1]=WX_TOP;        pos[i*6+2]=z;
@@ -2083,6 +2383,10 @@ function updateWind(dt) {{
   for (let i = 0; i < count; i++) {{
     pos[i*3] += speed * dt;
     pos[i*3+1] += Math.sin(performance.now()*0.001 + i*0.5) * 0.005;
+    const rY = roofSurfaceY(pos[i*3], pos[i*3+2]);
+    if (pos[i*3+1] < rY) {{
+      pos[i*3+1] = rY + 0.15; // bino ustidan oqib o'tadi, ichkariga kirmaydi
+    }}
     if (pos[i*3] > WX_MAX) pos[i*3] = WX_MIN;
   }}
   windGeo.attributes.position.needsUpdate = true;
@@ -2191,7 +2495,8 @@ const VIEWS = {{
 
 document.querySelectorAll('.vbtn').forEach(btn => {{
   btn.addEventListener('click', () => {{
-    document.querySelectorAll('.vbtn').forEach(b => b.classList.remove('active'));
+    if (!btn.dataset.v) return;
+    document.querySelectorAll('.vbtn[data-v]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const v = VIEWS[btn.dataset.v];
     if (v) {{
@@ -2272,130 +2577,158 @@ updateSnowVisual(); updateRainVisual(); updateWindVisual(); updateQuakeSliderLab
 document.getElementById('btnQuake').addEventListener('click', () => {{ startEarthquake(); }});
 
 // ============================================================
-// DRAG & DROP
+// DRAG & DROP — SICHQONCHA KURSORI ORQALI (marker/tugmasiz)
+// "Drag" rejimi yoqilganda eshik ustiga sichqonchani olib kelsangiz
+// kursorning o'zi (grab/grabbing) o'zgaradi, alohida nuqta/tugma chizilmaydi.
 // ============================================================
 let dragMode = false;
-let dragTarget = null;
+let dragTarget = null;           // {{ wall, index }}
 let dragStartMouse = null;
-let dragStartPos = null;
+let dragStartValue = null;
+let hoveredDoor = null;
+const raycaster = new THREE.Raycaster();
+const mouseNDC = new THREE.Vector2();
+
+function rebuildDoorHitboxes() {{
+  while (doorHitGroup.children.length > 0) doorHitGroup.remove(doorHitGroup.children[0]);
+  doorHitboxes = [];
+  const hitMat = new THREE.MeshBasicMaterial({{ visible: false }});
+
+  DOOR_FRONT_POSITIONS.forEach((doorX, idx) => {{
+    const dh = Math.max(1.0, DOOR_FRONT_H);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(DOOR_FRONT_W, dh, 0.6), hitMat);
+    box.position.set(doorX, dh / 2, W + 0.1);
+    doorHitGroup.add(box);
+    doorHitboxes.push({{ mesh: box, wall: 'front', index: idx }});
+  }});
+  DOOR_BACK_POSITIONS.forEach((doorX, idx) => {{
+    const dh = Math.max(1.0, DOOR_BACK_H);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(DOOR_BACK_W, dh, 0.6), hitMat);
+    box.position.set(doorX, dh / 2, -0.1);
+    doorHitGroup.add(box);
+    doorHitboxes.push({{ mesh: box, wall: 'back', index: idx }});
+  }});
+  DOOR_LEFT_POSITIONS.forEach((doorZ, idx) => {{
+    const dh = Math.max(1.0, DOOR_LEFT_H);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, dh, DOOR_LEFT_W), hitMat);
+    box.position.set(-0.1, dh / 2, doorZ);
+    doorHitGroup.add(box);
+    doorHitboxes.push({{ mesh: box, wall: 'left', index: idx }});
+  }});
+  DOOR_RIGHT_POSITIONS.forEach((doorZ, idx) => {{
+    const dh = Math.max(1.0, DOOR_RIGHT_H);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, dh, DOOR_RIGHT_W), hitMat);
+    box.position.set(L + 0.1, dh / 2, doorZ);
+    doorHitGroup.add(box);
+    doorHitboxes.push({{ mesh: box, wall: 'right', index: idx }});
+  }});
+}}
+
+function getWallPositionsArray(wall) {{
+  if (wall === 'front') return DOOR_FRONT_POSITIONS;
+  if (wall === 'back') return DOOR_BACK_POSITIONS;
+  if (wall === 'left') return DOOR_LEFT_POSITIONS;
+  return DOOR_RIGHT_POSITIONS;
+}}
+function getWallDoorWidth(wall) {{
+  if (wall === 'front') return DOOR_FRONT_W;
+  if (wall === 'back') return DOOR_BACK_W;
+  if (wall === 'left') return DOOR_LEFT_W;
+  return DOOR_RIGHT_W;
+}}
+function wallMovesAlongX(wall) {{ return wall === 'front' || wall === 'back'; }}
+function wallLimit(wall) {{ return wallMovesAlongX(wall) ? L : W; }}
+
+function pickDoorAtMouse(clientX, clientY) {{
+  mouseNDC.x = (clientX / window.innerWidth) * 2 - 1;
+  mouseNDC.y = -(clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouseNDC, camera);
+  const meshes = doorHitboxes.map(h => h.mesh);
+  const hits = raycaster.intersectObjects(meshes, false);
+  if (hits.length === 0) return null;
+  const hitMesh = hits[0].object;
+  return doorHitboxes.find(h => h.mesh === hitMesh) || null;
+}}
 
 document.getElementById('btnDragMode').addEventListener('click', function() {{
   dragMode = !dragMode;
   this.textContent = dragMode ? 'Drag Active' : 'Drag';
   this.style.background = dragMode ? '#4CAF50' : '#ff5722';
-  if (dragMode) {{ createDragMarkers(); }} else {{ removeDragMarkers(); }}
-}});
-
-function createDragMarkers() {{
-  removeDragMarkers();
-  DOOR_FRONT_POSITIONS.forEach((x, i) => {{
-    const marker = document.createElement('div');
-    marker.className = 'drag-marker door';
-    marker.dataset.type = 'door';
-    marker.dataset.wall = 'front';
-    marker.dataset.index = i;
-    marker.dataset.x = x;
-    marker.title = 'Front door ' + (i+1);
-    document.body.appendChild(marker);
-    positionMarker(marker, x, W, 'front');
-    addDragEvents(marker);
-  }});
-  DOOR_BACK_POSITIONS.forEach((x, i) => {{
-    const marker = document.createElement('div');
-    marker.className = 'drag-marker door';
-    marker.dataset.type = 'door';
-    marker.dataset.wall = 'back';
-    marker.dataset.index = i;
-    marker.dataset.x = x;
-    marker.title = 'Back door ' + (i+1);
-    document.body.appendChild(marker);
-    positionMarker(marker, x, 0, 'back');
-    addDragEvents(marker);
-  }});
-}}
-
-function removeDragMarkers() {{
-  document.querySelectorAll('.drag-marker').forEach(el => el.remove());
-  document.querySelectorAll('.drag-label').forEach(el => el.remove());
-}}
-
-function positionMarker(marker, x, z, wall) {{
-  const worldPos = new THREE.Vector3(x, H * 0.5, z);
-  const vector = worldPos.clone().project(camera);
-  const widthHalf = window.innerWidth / 2;
-  const heightHalf = window.innerHeight / 2;
-  const px = (vector.x * widthHalf) + widthHalf;
-  const py = -(vector.y * heightHalf) + heightHalf;
-  marker.style.left = px + 'px';
-  marker.style.top = py + 'px';
-  const label = document.createElement('div');
-  label.className = 'drag-label';
-  label.textContent = marker.dataset.type === 'door' ? 'D' : ' ';
-  label.style.left = px + 'px';
-  label.style.top = (py - 20) + 'px';
-  document.body.appendChild(label);
-}}
-
-function addDragEvents(marker) {{
-  marker.addEventListener('mousedown', function(e) {{
-    if (!dragMode) return;
-    e.preventDefault();
-    e.stopPropagation();
-    dragTarget = this;
-    dragStartMouse = {{x: e.clientX, y: e.clientY}};
-    dragStartPos = {{ x: parseFloat(this.dataset.x), y: parseFloat(this.dataset.y || 0) }};
-    this.style.cursor = 'grabbing';
-  }});
-}}
-
-document.addEventListener('mousemove', function(e) {{
-  if (!dragMode || !dragTarget) return;
-  e.preventDefault();
-  const dx = (e.clientX - dragStartMouse.x) / 200 * L;
-  const newX = Math.max(0.5, Math.min(L - 0.5, dragStartPos.x + dx));
-  const index = parseInt(dragTarget.dataset.index);
-  const wall = dragTarget.dataset.wall;
-  
-  if (wall === 'front') {{
-    let blocked = false;
-    for (let i = 0; i < DOOR_FRONT_POSITIONS.length; i++) {{
-      if (i !== index && Math.abs(DOOR_FRONT_POSITIONS[i] - newX) < DOOR_FRONT_W) {{ blocked = true; break; }}
-    }}
-    if (!blocked) {{
-      DOOR_FRONT_POSITIONS[index] = newX;
-      dragTarget.dataset.x = newX;
-      positionMarker(dragTarget, newX, W, 'front');
-      rebuildBuilding();
-    }}
-  }} else if (wall === 'back') {{
-    let blocked = false;
-    for (let i = 0; i < DOOR_BACK_POSITIONS.length; i++) {{
-      if (i !== index && Math.abs(DOOR_BACK_POSITIONS[i] - newX) < DOOR_BACK_W) {{ blocked = true; break; }}
-    }}
-    if (!blocked) {{
-      DOOR_BACK_POSITIONS[index] = newX;
-      dragTarget.dataset.x = newX;
-      positionMarker(dragTarget, newX, 0, 'back');
-      rebuildBuilding();
-    }}
-  }}
-}});
-
-document.addEventListener('mouseup', function(e) {{
-  if (dragTarget) {{
-    dragTarget.style.cursor = 'grab';
+  if (!dragMode) {{
+    hoveredDoor = null;
     dragTarget = null;
-    dragStartMouse = null;
-    dragStartPos = null;
+    renderer.domElement.style.cursor = 'default';
   }}
 }});
+
+renderer.domElement.style.touchAction = 'none';
+
+renderer.domElement.addEventListener('pointermove', function(e) {{
+  if (!dragMode) return;
+
+  if (dragTarget) {{
+    // ===== SUDRAB O'TKAZISH (sichqoncha yoki barmoq) =====
+    const wall = dragTarget.wall;
+    const idx = dragTarget.index;
+    const limit = wallLimit(wall);
+    const doorW = getWallDoorWidth(wall);
+    const positions = getWallPositionsArray(wall);
+    const along = wallMovesAlongX(wall) ? (e.clientX - dragStartMouse.x) : (e.clientY - dragStartMouse.y);
+    const delta = (along / 200) * limit;
+    let newVal = Math.max(doorW / 2, Math.min(limit - doorW / 2, dragStartValue + delta));
+    let blocked = false;
+    for (let i = 0; i < positions.length; i++) {{
+      if (i !== idx && Math.abs(positions[i] - newVal) < doorW) {{ blocked = true; break; }}
+    }}
+    if (!blocked) {{
+      positions[idx] = newVal;
+      rebuildBuilding();
+    }}
+    renderer.domElement.style.cursor = 'grabbing';
+    e.preventDefault();
+    return;
+  }}
+
+  // ===== FAQAT HOVER: KURSORNI TEKSHIRIB, O'ZGARTIRAMIZ (touch'da amal qilmaydi, zarar yo'q) =====
+  const found = pickDoorAtMouse(e.clientX, e.clientY);
+  if (found) {{
+    hoveredDoor = found;
+    renderer.domElement.style.cursor = 'grab';
+  }} else {{
+    hoveredDoor = null;
+    renderer.domElement.style.cursor = 'default';
+  }}
+}});
+
+renderer.domElement.addEventListener('pointerdown', function(e) {{
+  if (!dragMode) return;
+  const found = pickDoorAtMouse(e.clientX, e.clientY);
+  if (!found) return;
+  e.preventDefault();
+  dragTarget = found;
+  dragStartMouse = {{ x: e.clientX, y: e.clientY }};
+  dragStartValue = getWallPositionsArray(found.wall)[found.index];
+  renderer.domElement.style.cursor = 'grabbing';
+  controls.enabled = false; // sudrab o'tkazayotganda kamera aylanmasin
+  try {{ renderer.domElement.setPointerCapture(e.pointerId); }} catch (err) {{}}
+}});
+
+function endDoorDrag(e) {{
+  if (dragTarget) {{
+    if (e && e.pointerId !== undefined) {{
+      try {{ renderer.domElement.releasePointerCapture(e.pointerId); }} catch (err) {{}}
+    }}
+    dragTarget = null;
+    controls.enabled = true;
+    renderer.domElement.style.cursor = dragMode ? (hoveredDoor ? 'grab' : 'default') : 'default';
+  }}
+}}
+renderer.domElement.addEventListener('pointerup', endDoorDrag);
+renderer.domElement.addEventListener('pointercancel', endDoorDrag);
+window.addEventListener('pointerup', endDoorDrag);
 
 function rebuildBuilding() {{
-  while(wallGroup.children.length > 0) wallGroup.remove(wallGroup.children[0]);
-  while(windowGroup.children.length > 0) windowGroup.remove(windowGroup.children[0]);
-  while(doorGroup.children.length > 0) doorGroup.remove(doorGroup.children[0]);
   buildAllWalls();
-  if (dragMode) {{ removeDragMarkers(); createDragMarkers(); }}
 }}
 
 window.addEventListener('resize', () => {{
@@ -2426,9 +2759,6 @@ setTimeout(() => {{ const l = document.getElementById('loading'); if (l) l.style
 </body>
 </html>"""
     return html
-
-
-
 def calculate_door_positions(length, count, door_width):
     """Darvozalar joylashuvini hisoblash"""
     positions = []
@@ -3945,13 +4275,13 @@ def construction_sidebar():
         st.markdown("#### Metall narxlari")
         col_m1, col_m2 = st.columns(2)
         with col_m1:
-            price_column = st.number_input("Ustunlar", min_value=0.0, max_value=5000.0, value=950.0, step=50.0, key="price_metal_column")
-            price_truss = st.number_input("Fermalar", min_value=0.0, max_value=5000.0, value=950.0, step=50.0, key="price_metal_truss")
-            price_purlins = st.number_input("Progonlar", min_value=0.0, max_value=5000.0, value=950.0, step=50.0, key="price_metal_purlins")
+            price_column = st.number_input("Ustunlar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_column")
+            price_truss = st.number_input("Fermalar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_truss")
+            price_purlins = st.number_input("Progonlar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_purlins")
         with col_m2:
-            price_beam = st.number_input("Tosinlar", min_value=0.0, max_value=5000.0, value=950.0, step=50.0, key="price_metal_beam")
-            price_longitudinal = st.number_input("Uzunasiga", min_value=0.0, max_value=5000.0, value=950.0, step=50.0, key="price_metal_longitudinal")
-            price_bracing = st.number_input("Bog'lamalar", min_value=0.0, max_value=5000.0, value=950.0, step=50.0, key="price_metal_bracing")
+            price_beam = st.number_input("Tosinlar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_beam")
+            price_longitudinal = st.number_input("Uzunasiga", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_longitudinal")
+            price_bracing = st.number_input("Bog'lamalar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_bracing")
         
         st.markdown("#### Birikma detallari")
         col_c1, col_c2 = st.columns(2)
@@ -3967,7 +4297,7 @@ def construction_sidebar():
                 "Birikmalar narxi (1 tonna)", 
                 min_value=0.0, 
                 max_value=5000.0, 
-                value=950.0, 
+                value=0.0, 
                 step=50.0, 
                 key="price_metal_connection"
             )
@@ -3975,23 +4305,23 @@ def construction_sidebar():
         st.markdown("#### Qurilish materiallari (1 m²/$)")
         col_p1, col_p2 = st.columns(2)
         with col_p1:
-            wall_price = st.number_input("Devor paneli", min_value=0.0, max_value=500.0, value=35.0, step=5.0, key="price_wall")
-            roof_price = st.number_input("Tom qoplamasi", min_value=0.0, max_value=500.0, value=45.0, step=5.0, key="price_roof")
+            wall_price = st.number_input("Devor paneli", min_value=0.0, max_value=500.0, value=0.0, step=5.0, key="price_wall")
+            roof_price = st.number_input("Tom qoplamasi", min_value=0.0, max_value=500.0, value=0.0, step=5.0, key="price_roof")
         with col_p2:
-            floor_price = st.number_input("Pol qoplamasi", min_value=0.0, max_value=500.0, value=45.0, step=5.0, key="price_floor")
-            window_price = st.number_input("Deraza (1 m²)", min_value=0.0, max_value=200.0, value=45.0, step=5.0, key="price_window")
-            door_price = st.number_input("Darvoza (1 m²)", min_value=0.0, max_value=200.0, value=28.0, step=5.0, key="price_door")
+            floor_price = st.number_input("Pol qoplamasi", min_value=0.0, max_value=500.0, value=0.0, step=5.0, key="price_floor")
+            window_price = st.number_input("Deraza (1 m²)", min_value=0.0, max_value=200.0, value=0.0, step=5.0, key="price_window")
+            door_price = st.number_input("Darvoza (1 m²)", min_value=0.0, max_value=200.0, value=0.0, step=5.0, key="price_door")
         
         st.markdown("#### Beton va materiallar")
         col_b1, col_b2 = st.columns(2)
         with col_b1:
-            concrete_price = st.number_input("Beton (1 m³)", min_value=0.0, max_value=500.0, value=85.0, step=5.0, key="price_concrete")
-            cement_price = st.number_input("Sement (1 kg)", min_value=0.0, max_value=1.0, value=0.09, step=0.01, key="price_cement")
-            sand_price = st.number_input("Qum (1 m³)", min_value=0.0, max_value=200.0, value=35.0, step=5.0, key="price_sand")
+            concrete_price = st.number_input("Beton (1 m³)", min_value=0.0, max_value=500.0, value=0.0, step=5.0, key="price_concrete")
+            cement_price = st.number_input("Sement (1 kg)", min_value=0.0, max_value=1.0, value=0.0, step=0.01, key="price_cement")
+            sand_price = st.number_input("Qum (1 m³)", min_value=0.0, max_value=200.0, value=0.0, step=5.0, key="price_sand")
         with col_b2:
-            rebar_price = st.number_input("Armatura (1 kg)", min_value=0.0, max_value=2.0, value=0.85, step=0.05, key="price_rebar")
-            gravel_price = st.number_input("Shag'al (1 m³)", min_value=0.0, max_value=200.0, value=40.0, step=5.0, key="price_gravel")
-            shipyak_price = st.number_input("Shipyak (1 m²)", min_value=0.0, max_value=100.0, value=30.0, step=5.0, key="price_shipyak")
+            rebar_price = st.number_input("Armatura (1 kg)", min_value=0.0, max_value=2.0, value=0.0, step=0.05, key="price_rebar")
+            gravel_price = st.number_input("Shag'al (1 m³)", min_value=0.0, max_value=200.0, value=0.0, step=5.0, key="price_gravel")
+            shipyak_price = st.number_input("Shipyak (1 m²)", min_value=0.0, max_value=100.0, value=0.0, step=5.0, key="price_shipyak")
         
         st.markdown("#### Ishchi kuchi")
         labor_percent = st.slider("Ishchi kuchi foizi (%)", 0, 100, 32, 1, key="labor_percent")
@@ -4144,15 +4474,15 @@ def construction_sidebar():
         st.markdown("#### Metall narxlari")
         col_m1, col_m2 = st.columns(2)
         with col_m1:
-            price_column = st.number_input("Ustunlar", min_value=0.0, max_value=5000.0, value=950.0, step=50.0, key="price_metal_column")
-            price_truss = st.number_input("Fermalar", min_value=0.0, max_value=5000.0, value=950.0, step=50.0, key="price_metal_truss")
+            price_column = st.number_input("Ustunlar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_column")
+            price_truss = st.number_input("Fermalar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_truss")
             # 🔽 YANGI: Progonlar narxi
-            price_purlins = st.number_input("Progonlar", min_value=0.0, max_value=5000.0, value=950.0, step=50.0, key="price_metal_purlins")
+            price_purlins = st.number_input("Progonlar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_purlins")
         with col_m2:
-            price_beam = st.number_input("Tosinlar", min_value=0.0, max_value=5000.0, value=950.0, step=50.0, key="price_metal_beam")
-            price_longitudinal = st.number_input("Uzunasiga", min_value=0.0, max_value=5000.0, value=950.0, step=50.0, key="price_metal_longitudinal")
+            price_beam = st.number_input("Tosinlar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_beam")
+            price_longitudinal = st.number_input("Uzunasiga", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_longitudinal")
             # 🔽 YANGI: Bog'lamalar narxi
-            price_bracing = st.number_input("Bog'lamalar", min_value=0.0, max_value=5000.0, value=950.0, step=50.0, key="price_metal_bracing")
+            price_bracing = st.number_input("Bog'lamalar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_bracing")
         
         # 🔽 YANGI: Birikma turi va narxi
         st.markdown("#### Birikma detallari")
@@ -4169,7 +4499,7 @@ def construction_sidebar():
                 "Birikmalar narxi (1 tonna)", 
                 min_value=0.0, 
                 max_value=5000.0, 
-                value=950.0, 
+                value=0.0, 
                 step=50.0, 
                 key="price_metal_connection"
             )
@@ -4187,13 +4517,13 @@ def construction_sidebar():
         st.markdown("#### Beton va materiallar")
         col_b1, col_b2 = st.columns(2)
         with col_b1:
-            concrete_price = st.number_input("Beton (1 m³)", min_value=0.0, max_value=500.0, value=85.0, step=5.0, key="price_concrete")
-            cement_price = st.number_input("Sement (1 kg)", min_value=0.0, max_value=1.0, value=0.09, step=0.01, key="price_cement")
-            sand_price = st.number_input("Qum (1 m³)", min_value=0.0, max_value=200.0, value=35.0, step=5.0, key="price_sand")
+            concrete_price = st.number_input("Beton (1 m³)", min_value=0.0, max_value=500.0, value=0.0, step=5.0, key="price_concrete")
+            cement_price = st.number_input("Sement (1 kg)", min_value=0.0, max_value=1.0, value=0.0, step=0.01, key="price_cement")
+            sand_price = st.number_input("Qum (1 m³)", min_value=0.0, max_value=200.0, value=0.0, step=5.0, key="price_sand")
         with col_b2:
-            rebar_price = st.number_input("Armatura (1 kg)", min_value=0.0, max_value=2.0, value=0.85, step=0.05, key="price_rebar")
-            gravel_price = st.number_input("Shag'al (1 m³)", min_value=0.0, max_value=200.0, value=40.0, step=5.0, key="price_gravel")
-            shipyak_price = st.number_input("Shipyak (1 m²)", min_value=0.0, max_value=100.0, value=30.0, step=5.0, key="price_shipyak")
+            rebar_price = st.number_input("Armatura (1 kg)", min_value=0.0, max_value=2.0, value=0.0, step=0.05, key="price_rebar")
+            gravel_price = st.number_input("Shag'al (1 m³)", min_value=0.0, max_value=200.0, value=0.0, step=5.0, key="price_gravel")
+            shipyak_price = st.number_input("Shipyak (1 m²)", min_value=0.0, max_value=100.0, value=0.0, step=5.0, key="price_shipyak")
         
         st.markdown("#### Ishchi kuchi")
         labor_percent = st.slider("Ishchi kuchi foizi (%)", 0, 100, 32, 1, key="labor_percent")
