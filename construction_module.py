@@ -880,15 +880,854 @@ def compute_resilience_report(params, materials):
     }
 
 
-
-
-import math
-import json
-
+# ============================================================
+# FEM (Finite Element Method) - KONSTRUKSIYA TAHLILI
+# ============================================================
 
 import math
-import json
+import matplotlib.pyplot as plt
+import numpy as np
 
+# ============================================================
+# 1. YUK KOMBINATSIYALARI KLASSI
+# ============================================================
+class LoadCombinations:
+    """Yuk kombinatsiyalari - KMK / ASCE 7 / Eurocode asosida"""
+    
+    def __init__(self):
+        self.combinations = [
+            {"name": "1.4D", "D": 1.4, "L": 0, "S": 0, "W": 0, "E": 0},
+            {"name": "1.2D + 1.6L", "D": 1.2, "L": 1.6, "S": 0, "W": 0, "E": 0},
+            {"name": "1.2D + 1.6S", "D": 1.2, "L": 0, "S": 1.6, "W": 0, "E": 0},
+            {"name": "1.2D + W + 0.5L", "D": 1.2, "L": 0.5, "S": 0, "W": 1.3, "E": 0},
+            {"name": "1.2D + W + 0.7S", "D": 1.2, "L": 0, "S": 0.7, "W": 1.3, "E": 0},
+            {"name": "0.9D + W", "D": 0.9, "L": 0, "S": 0, "W": 1.3, "E": 0},
+            {"name": "0.9D + E", "D": 0.9, "L": 0, "S": 0, "W": 0, "E": 1.0},
+            {"name": "1.2D + E + 0.5L", "D": 1.2, "L": 0.5, "S": 0, "W": 0, "E": 1.0},
+        ]
+    
+    def get_combinations(self):
+        return self.combinations
+
+
+# ============================================================
+# 2. YORDAMCHI FUNKSIYALAR
+# ============================================================
+def compute_column_layout(L, W, column_spacing):
+    """Ustunlar joylashuvini hisoblash"""
+    n_cols_x = max(2, int(L / column_spacing) + 1)
+    n_cols_z = max(2, int(W / column_spacing) + 1)
+    
+    spacing_x = L / (n_cols_x - 1)
+    spacing_z = W / (n_cols_z - 1)
+    
+    return {
+        "n_cols_x": n_cols_x,
+        "n_cols_z": n_cols_z,
+        "spacing_x": spacing_x,
+        "spacing_z": spacing_z
+    }
+
+
+# ============================================================
+# 3. POYDEVOR HISOBI KLASSI
+# ============================================================
+class FoundationDesign:
+    """Poydevor hisobi"""
+    
+    def __init__(self, soil_type, seismic_zone):
+        self.soil_type = soil_type
+        self.seismic_zone = seismic_zone
+        
+        self.soil_data = {
+            "Qoyali tog' jinsi": {"R0": 600, "bearing": 600, "friction": 35},
+            "Yirik shag'al": {"R0": 500, "bearing": 500, "friction": 30},
+            "Zich qum": {"R0": 400, "bearing": 400, "friction": 28},
+            "O'rta qum": {"R0": 300, "bearing": 300, "friction": 25},
+            "Qattiq gil": {"R0": 300, "bearing": 300, "friction": 20},
+            "Yarim qattiq gil": {"R0": 250, "bearing": 250, "friction": 18},
+            "Bo'sh qum": {"R0": 150, "bearing": 150, "friction": 15},
+            "Yumshoq gil": {"R0": 120, "bearing": 120, "friction": 12},
+            "Lyoss": {"R0": 180, "bearing": 180, "friction": 20},
+            "Torfli": {"R0": 50, "bearing": 50, "friction": 5},
+        }
+        
+        self.standard_sizes = [0.8, 1.0, 1.2, 1.5, 1.8, 2.0, 2.4, 2.8, 3.2, 3.6, 4.0]
+    
+    def design_footing(self, axial_force_kg, moment_Nm=0):
+        """Ustun poydevorini loyihalash"""
+        N = axial_force_kg * 9.81  # N
+        M = moment_Nm  # N*m
+        
+        soil = self.soil_data.get(self.soil_type, self.soil_data["O'rta qum"])
+        R0 = soil["R0"] * 1000  # Pa
+        
+        A_required = N / R0  # m²
+        
+        # Eksentrisitet
+        e = M / N if N > 0 else 0
+        if e > 0:
+            A_eff = A_required * (1 + 6 * e / math.sqrt(A_required))
+        else:
+            A_eff = A_required
+        
+        # Standart o'lcham tanlash
+        side_required = math.sqrt(A_eff)
+        chosen_side = self.standard_sizes[0]
+        for s in self.standard_sizes:
+            if s >= side_required:
+                chosen_side = s
+                break
+        
+        A_chosen = chosen_side ** 2
+        pressure = N / A_chosen
+        pressure_kPa = pressure / 1000
+        
+        utilization = (pressure / R0) * 100
+        
+        return {
+            "axial_force_kg": axial_force_kg,
+            "moment_Nm": M,
+            "soil_type": self.soil_type,
+            "soil_R0_kPa": soil["R0"],
+            "required_area_m2": round(A_required, 2),
+            "chosen_side_m": chosen_side,
+            "chosen_area_m2": round(A_chosen, 2),
+            "pressure_kPa": round(pressure_kPa, 1),
+            "utilization": round(utilization, 1),
+            "is_safe": utilization <= 100,
+            "recommendation": "Poydevor yetarli" if utilization <= 100 else f"{chosen_side + 0.4}x{chosen_side + 0.4} m"
+        }
+
+
+# ============================================================
+# 4. FEM ANALYZER KLASSI (100m BINO UCHUN TUZATILGAN)
+# ============================================================
+class FEMAnalyzer:
+    """
+    FEM (Finite Element Method) - to'liq 3D FEM tahlili.
+    100m uzunlikdagi binolar uchun optimallashtirilgan
+    """
+
+    def __init__(self, params, materials):
+        self.params = params
+        self.materials = materials
+        self.L = params.get("L", 100)
+        self.W = params.get("W", 18)
+        self.H = params.get("H", 6)
+        self.roof_pitch = params.get("roof_pitch", 12)
+
+        self.column_spacing = params.get("column_spacing", 6.8)
+        self.layout = compute_column_layout(self.L, self.W, self.column_spacing)
+
+        self.snow_load = params.get("snow_kg_m2", 50)
+        self.wind_kPa = params.get("wind_kPa", 0.38)
+        self.seismic_zone = params.get("seismic_zone", 8)
+        self.live_load = params.get("live_load_kg_m2", 200)
+
+        self.E = 210e9  # Pa - elastiklik moduli
+        self.G = 80e9   # Pa - siljish moduli
+        self.Ry = 230e6 # Pa - oquvchanlik chegarasi
+        self.density = 7850  # kg/m³
+
+        self.max_deflection_ratio = 1/200
+
+        # Yuk kombinatsiyalari
+        self.load_combos = LoadCombinations()
+        
+        # Poydevor dizayni
+        self.soil_type = params.get("soil_type", "O'rta qum")
+        self.foundation_designer = FoundationDesign(self.soil_type, self.seismic_zone)
+
+        # Progon oralig'i (avtomatik optimallashtiriladi)
+        self.purlin_spacing = params.get("purlin_spacing", 1.5)
+
+        # ============================================================
+        # PROFIL KUTUBXONASI (KENGAYTIRILGAN)
+        # ============================================================
+        self.profiles = {
+            "column": [
+                {"name": "200x200x6", "h": 0.20, "bf": 0.20, "tf": 0.006, "tw": 0.006, "A": 0.0048, "Ix": 3.2e-5, "Iy": 3.2e-5, "weight": 37.7},
+                {"name": "200x200x8", "h": 0.20, "bf": 0.20, "tf": 0.008, "tw": 0.008, "A": 0.0064, "Ix": 4.1e-5, "Iy": 4.1e-5, "weight": 50.2},
+                {"name": "250x250x8", "h": 0.25, "bf": 0.25, "tf": 0.008, "tw": 0.008, "A": 0.0080, "Ix": 8.8e-5, "Iy": 8.8e-5, "weight": 62.8},
+                {"name": "250x250x10", "h": 0.25, "bf": 0.25, "tf": 0.010, "tw": 0.010, "A": 0.0100, "Ix": 1.1e-4, "Iy": 1.1e-4, "weight": 78.5},
+                {"name": "300x300x10", "h": 0.30, "bf": 0.30, "tf": 0.010, "tw": 0.010, "A": 0.0120, "Ix": 1.9e-4, "Iy": 1.9e-4, "weight": 94.2},
+                {"name": "300x300x12", "h": 0.30, "bf": 0.30, "tf": 0.012, "tw": 0.012, "A": 0.0144, "Ix": 2.7e-4, "Iy": 2.7e-4, "weight": 113.0},
+                {"name": "350x350x12", "h": 0.35, "bf": 0.35, "tf": 0.012, "tw": 0.012, "A": 0.0168, "Ix": 3.6e-4, "Iy": 3.6e-4, "weight": 131.9},
+                {"name": "400x400x14", "h": 0.40, "bf": 0.40, "tf": 0.014, "tw": 0.014, "A": 0.0224, "Ix": 6.1e-4, "Iy": 6.1e-4, "weight": 175.8},
+                {"name": "450x450x16", "h": 0.45, "bf": 0.45, "tf": 0.016, "tw": 0.016, "A": 0.0288, "Ix": 9.7e-4, "Iy": 9.7e-4, "weight": 226.1},
+                {"name": "500x500x18", "h": 0.50, "bf": 0.50, "tf": 0.018, "tw": 0.018, "A": 0.0360, "Ix": 1.5e-3, "Iy": 1.5e-3, "weight": 282.6},
+            ],
+            "truss": [
+                {"name": "60x60x3", "a": 0.06, "t": 0.003, "A": 0.000684, "I": 3.6e-7, "weight": 5.25},
+                {"name": "60x60x4", "a": 0.06, "t": 0.004, "A": 0.000896, "I": 4.5e-7, "weight": 6.78},
+                {"name": "80x80x3", "a": 0.08, "t": 0.003, "A": 0.000924, "I": 9.2e-7, "weight": 7.13},
+                {"name": "80x80x4", "a": 0.08, "t": 0.004, "A": 0.001216, "I": 1.2e-6, "weight": 9.11},
+                {"name": "100x100x3", "a": 0.10, "t": 0.003, "A": 0.001164, "I": 1.8e-6, "weight": 9.02},
+                {"name": "100x100x4", "a": 0.10, "t": 0.004, "A": 0.001536, "I": 2.3e-6, "weight": 11.62},
+                {"name": "120x120x4", "a": 0.12, "t": 0.004, "A": 0.001856, "I": 4.1e-6, "weight": 14.13},
+                {"name": "120x120x5", "a": 0.12, "t": 0.005, "A": 0.002300, "I": 5.0e-6, "weight": 17.31},
+                {"name": "140x140x5", "a": 0.14, "t": 0.005, "A": 0.002700, "I": 8.4e-6, "weight": 20.45},
+                {"name": "160x160x5", "a": 0.16, "t": 0.005, "A": 0.003100, "I": 1.3e-5, "weight": 23.59},
+                {"name": "180x180x6", "a": 0.18, "t": 0.006, "A": 0.004176, "I": 2.1e-5, "weight": 32.78},
+                {"name": "200x200x6", "a": 0.20, "t": 0.006, "A": 0.004656, "I": 2.8e-5, "weight": 36.55},
+                {"name": "220x220x8", "a": 0.22, "t": 0.008, "A": 0.006784, "I": 4.8e-5, "weight": 53.25},
+                {"name": "250x250x8", "a": 0.25, "t": 0.008, "A": 0.007744, "I": 7.0e-5, "weight": 60.79},
+                {"name": "300x300x10", "a": 0.30, "t": 0.010, "A": 0.0116, "I": 1.35e-4, "weight": 91.06},
+            ],
+            "purlin": [
+                {"name": "80x40x3", "h": 0.08, "b": 0.04, "t": 0.003, "A": 0.000684, "Ix": 4.2e-7, "Iy": 1.8e-7, "weight": 5.02},
+                {"name": "80x40x4", "h": 0.08, "b": 0.04, "t": 0.004, "A": 0.000896, "Ix": 5.4e-7, "Iy": 2.3e-7, "weight": 6.47},
+                {"name": "100x50x3", "h": 0.10, "b": 0.05, "t": 0.003, "A": 0.000840, "Ix": 8.5e-7, "Iy": 3.2e-7, "weight": 6.67},
+                {"name": "100x50x4", "h": 0.10, "b": 0.05, "t": 0.004, "A": 0.001104, "Ix": 1.1e-6, "Iy": 4.1e-7, "weight": 8.52},
+                {"name": "120x60x3", "h": 0.12, "b": 0.06, "t": 0.003, "A": 0.001044, "Ix": 1.6e-6, "Iy": 5.4e-7, "weight": 8.05},
+                {"name": "120x60x4", "h": 0.12, "b": 0.06, "t": 0.004, "A": 0.001344, "Ix": 2.1e-6, "Iy": 6.8e-7, "weight": 10.40},
+                {"name": "140x60x4", "h": 0.14, "b": 0.06, "t": 0.004, "A": 0.001504, "Ix": 3.3e-6, "Iy": 8.1e-7, "weight": 11.65},
+                {"name": "160x80x4", "h": 0.16, "b": 0.08, "t": 0.004, "A": 0.001824, "Ix": 5.4e-6, "Iy": 1.4e-6, "weight": 14.16},
+                {"name": "180x80x5", "h": 0.18, "b": 0.08, "t": 0.005, "A": 0.002320, "Ix": 9.2e-6, "Iy": 2.1e-6, "weight": 18.21},
+                {"name": "200x100x5", "h": 0.20, "b": 0.10, "t": 0.005, "A": 0.002900, "Ix": 1.5e-5, "Iy": 3.5e-6, "weight": 22.77},
+                {"name": "220x120x6", "h": 0.22, "b": 0.12, "t": 0.006, "A": 0.003840, "Ix": 2.4e-5, "Iy": 5.2e-6, "weight": 30.14},
+                {"name": "250x140x6", "h": 0.25, "b": 0.14, "t": 0.006, "A": 0.004560, "Ix": 3.8e-5, "Iy": 8.5e-6, "weight": 35.80},
+            ],
+            "bracing": [
+                {"name": "Shveller 10P", "A": 0.00109, "Ix": 1.75e-6, "Iy": 4.5e-7, "r": 0.040, "weight": 8.59},
+                {"name": "Shveller 12P", "A": 0.00133, "Ix": 3.04e-6, "Iy": 7.2e-7, "r": 0.048, "weight": 10.40},
+                {"name": "Shveller 14P", "A": 0.00156, "Ix": 4.91e-6, "Iy": 1.1e-6, "r": 0.056, "weight": 12.30},
+                {"name": "Shveller 16P", "A": 0.00181, "Ix": 7.47e-6, "Iy": 1.5e-6, "r": 0.064, "weight": 14.20},
+                {"name": "Shveller 18P", "A": 0.00207, "Ix": 1.09e-5, "Iy": 2.0e-6, "r": 0.072, "weight": 16.30},
+                {"name": "Shveller 20P", "A": 0.00234, "Ix": 1.52e-5, "Iy": 2.6e-6, "r": 0.081, "weight": 18.40},
+                {"name": "Shveller 24P", "A": 0.00306, "Ix": 2.60e-5, "Iy": 3.8e-6, "r": 0.092, "weight": 24.00},
+                {"name": "Truba 80x80x4", "A": 0.001216, "Ix": 1.2e-6, "Iy": 1.2e-6, "r": 0.031, "weight": 9.11},
+                {"name": "Truba 100x100x4", "A": 0.001536, "Ix": 2.3e-6, "Iy": 2.3e-6, "r": 0.039, "weight": 11.62},
+                {"name": "Truba 120x120x5", "A": 0.002300, "Ix": 4.8e-6, "Iy": 4.8e-6, "r": 0.046, "weight": 17.31},
+                {"name": "Truba 140x140x5", "A": 0.002700, "Ix": 8.4e-6, "Iy": 8.4e-6, "r": 0.056, "weight": 20.45},
+                {"name": "Truba 160x160x5", "A": 0.003100, "Ix": 1.3e-5, "Iy": 1.3e-5, "r": 0.065, "weight": 23.59},
+                {"name": "Truba 180x180x6", "A": 0.004176, "Ix": 2.1e-5, "Iy": 2.1e-5, "r": 0.071, "weight": 32.78},
+                {"name": "Truba 200x200x6", "A": 0.004656, "Ix": 2.8e-5, "Iy": 2.8e-5, "r": 0.077, "weight": 36.55},
+                {"name": "Truba 220x220x8", "A": 0.006784, "Ix": 4.8e-5, "Iy": 4.8e-5, "r": 0.084, "weight": 53.25},
+                {"name": "Truba 250x250x8", "A": 0.007744, "Ix": 6.2e-5, "Iy": 6.2e-5, "r": 0.089, "weight": 60.79},
+            ]
+        }
+
+        self.seismic_coeff = {7: 0.05, 8: 0.10, 9: 0.20}
+
+    # ============================================================
+    # 5. PROFIL TANLASH METODLARI
+    # ============================================================
+    
+    def _get_profile(self, profile_type, name):
+        for p in self.profiles.get(profile_type, []):
+            if p["name"] == name:
+                return p
+        return self.profiles[profile_type][-1] if self.profiles.get(profile_type) else None
+
+    def _find_optimal_column_profile(self, N, M, H):
+        for profile in reversed(self.profiles["column"]):
+            h = profile["h"]
+            A = profile["A"]
+            Ix = profile["Ix"]
+
+            Wx = Ix / (h / 2) if h > 0 else Ix * 2
+            sigma = N / A + M / Wx if Wx > 0 else 999e6
+
+            Pcr = math.pi**2 * self.E * Ix / (H**2)
+            buckling_ratio = N / Pcr if Pcr > 0 else 999
+
+            if sigma <= self.Ry * 0.85 and buckling_ratio <= 0.85:
+                return profile
+
+        return self.profiles["column"][-1]
+
+    def _find_optimal_truss_profile(self, F, L):
+        for profile in reversed(self.profiles["truss"]):
+            A = profile["A"]
+            I = profile["I"]
+
+            sigma = F / A
+            Pcr = math.pi**2 * self.E * I / (L**2)
+            buckling_ratio = F / Pcr if Pcr > 0 else 999
+
+            if sigma <= self.Ry * 0.85 and buckling_ratio <= 0.85:
+                return profile
+
+        return self.profiles["truss"][-1]
+
+    def _find_optimal_purlin_profile(self, M, L):
+        max_deflection = L / 200
+        
+        for profile in reversed(self.profiles["purlin"]):
+            Ix = profile["Ix"]
+            h = profile["h"]
+            Wx = Ix / (h / 2) if h > 0 else Ix * 2
+
+            sigma = M / Wx if Wx > 0 else 999e6
+            
+            q = M * 8 / L**2 if L > 0 else 0
+            deflection = 5 * q * L**4 / (384 * self.E * Ix) if Ix > 0 and self.E > 0 else 999
+
+            if sigma <= self.Ry * 0.85 and deflection <= max_deflection * 0.85:
+                return profile
+
+        return self.profiles["purlin"][-1]
+
+    def _find_optimal_bracing_profile(self, F, L):
+        for profile in reversed(self.profiles["bracing"]):
+            A = profile["A"]
+            r = profile["r"]
+            
+            sigma = F / A
+            lambda_ = L / r if r > 0 else 999
+            
+            if lambda_ <= 105:
+                phi = 1 - 0.066 * (lambda_ / 100)**2
+            else:
+                phi = 0.35 / (lambda_ / 100)**2
+            
+            buckling_sigma = sigma / phi if phi > 0 else sigma * 10
+            
+            if sigma <= self.Ry * 0.85 and buckling_sigma <= self.Ry * 0.85:
+                return profile
+
+        return self.profiles["bracing"][-1]
+
+    # ============================================================
+    # 6. ANALIZ FUNKSIYALARI
+    # ============================================================
+    
+    def analyze_column(self, column_index, x, z):
+        spacing_x = self.layout["spacing_x"]
+        spacing_z = self.layout["spacing_z"]
+
+        ax = spacing_x / 2 if (x == 0 or x == self.L) else spacing_x
+        az = spacing_z / 2 if (z == 0 or z == self.W) else spacing_z
+
+        tributary_area = ax * az
+
+        roof_dead = 13
+        wall_dead = 12
+
+        D = (roof_dead + wall_dead) * tributary_area * 9.81
+        L_load = self.live_load * tributary_area * 9.81
+        S = self.snow_load * tributary_area * 9.81
+        wind_area = (ax + az) / 2 * self.H
+        W = self.wind_kPa * 1000 * wind_area
+        E = D * self.seismic_coeff.get(self.seismic_zone, 0.10)
+
+        N = 0
+        M = 0
+        combo_name = ""
+        
+        for combo in self.load_combos.get_combinations():
+            N_combo = combo["D"] * D + combo["L"] * L_load + combo["S"] * S
+            M_combo = combo["W"] * W * self.H / 2 + combo["E"] * E * self.H / 2
+            
+            if N_combo > N or (N_combo == N and M_combo > M):
+                N = N_combo
+                M = M_combo
+                combo_name = combo["name"]
+
+        profile = self._find_optimal_column_profile(N, M, self.H)
+
+        h = profile["h"]
+        Wx = profile["Ix"] / (h / 2) if h > 0 else profile["Ix"] * 2
+        sigma = N / profile["A"] + M / Wx if Wx > 0 else 999e6
+
+        Pcr = math.pi**2 * self.E * profile["Ix"] / (self.H**2)
+        buckling_ratio = N / Pcr if Pcr > 0 else 999
+
+        utilization = max(sigma / self.Ry * 100, buckling_ratio * 100)
+        is_safe = utilization <= 100
+
+        return {
+            "index": column_index,
+            "x": x,
+            "z": z,
+            "axial_force_kg": round(N / 9.81, 1),
+            "moment_Nm": round(M, 1),
+            "sigma_MPa": round(sigma / 1e6, 2),
+            "buckling_ratio": round(buckling_ratio * 100, 1),
+            "utilization": round(utilization, 1),
+            "profile": profile["name"],
+            "is_safe": is_safe,
+            "recommendation": profile["name"] if is_safe else self.profiles["column"][-1]["name"],
+            "status": "✅ Yetarli" if is_safe else "❌ Yetarli emas",
+            "combo_name": combo_name
+        }
+
+    def analyze_truss(self, truss_index, x):
+        """Ferma tahlili - 100m bino uchun optimallashtirilgan"""
+        pitch_rad = math.radians(self.roof_pitch)
+        if self.roof_pitch > 0 and self.W > 0:
+            truss_length = self.W / math.cos(pitch_rad)
+        else:
+            truss_length = self.W
+
+        truss_spacing = self.layout["spacing_x"]
+
+        # Progon oralig'i
+        purlin_spacing = self.purlin_spacing
+        n_purlins = max(2, int(truss_length / purlin_spacing))
+        
+        # Yuk maydoni
+        tributary_area = truss_spacing * purlin_spacing
+        
+        D = 13 * tributary_area * 9.81
+        L_load = self.live_load * tributary_area * 9.81
+        S = self.snow_load * tributary_area * 9.81
+        
+        F = 0
+        combo_name = ""
+        for combo in self.load_combos.get_combinations():
+            F_combo = (combo["D"] * D + combo["L"] * L_load + combo["S"] * S) * n_purlins / 2
+            if F_combo > F:
+                F = F_combo
+                combo_name = combo["name"]
+
+        profile = self._find_optimal_truss_profile(F, truss_length)
+
+        sigma = F / profile["A"]
+
+        Pcr = math.pi**2 * self.E * profile["I"] / (truss_length**2)
+        buckling_ratio = F / Pcr if Pcr > 0 else 999
+
+        utilization = max(sigma / self.Ry * 100, buckling_ratio * 100)
+        is_safe = utilization <= 100
+
+        return {
+            "index": truss_index,
+            "x": x,
+            "length_m": round(truss_length, 1),
+            "max_force_kg": round(F / 9.81, 1),
+            "sigma_MPa": round(sigma / 1e6, 2),
+            "buckling_ratio": round(buckling_ratio, 1),
+            "utilization": round(utilization, 1),
+            "profile": profile["name"],
+            "is_safe": is_safe,
+            "recommendation": profile["name"] if is_safe else self.profiles["truss"][-1]["name"],
+            "status": "✅ Yetarli" if is_safe else "❌ Yetarli emas",
+            "combo_name": combo_name
+        }
+
+    def analyze_purlin(self, purlin_index, x, z):
+        """Progon tahlili"""
+        length = self.layout["spacing_x"]
+        purlin_spacing = self.purlin_spacing
+
+        dead_load = 13
+        live_load = self.live_load
+        snow_load = self.snow_load
+
+        q_dead = dead_load * 9.81
+        q_live = live_load * 9.81
+        q_snow = snow_load * 9.81
+
+        tributary_width = purlin_spacing
+        q_dead_total = q_dead * tributary_width
+        q_live_total = q_live * tributary_width
+        q_snow_total = q_snow * tributary_width
+
+        q_max = 0
+        combo_name = ""
+        for combo in self.load_combos.get_combinations():
+            q_combo = combo["D"] * q_dead_total + combo["L"] * q_live_total + combo["S"] * q_snow_total
+            if q_combo > q_max:
+                q_max = q_combo
+                combo_name = combo["name"]
+
+        M = q_max * length**2 / 8
+        max_deflection = length / 200
+
+        profile = self._find_optimal_purlin_profile(M, length)
+
+        Ix = profile["Ix"]
+        h = profile["h"]
+        Wx = Ix / (h / 2) if h > 0 else Ix * 2
+
+        sigma = M / Wx if Wx > 0 else 999e6
+
+        deflection = 5 * q_max * length**4 / (384 * self.E * Ix) if Ix > 0 and self.E > 0 else 999
+        deflection_mm = deflection * 1000
+        max_deflection_mm = max_deflection * 1000
+
+        utilization_stress = (sigma / self.Ry) * 100 if self.Ry > 0 else 0
+        utilization_deflection = (deflection / max_deflection) * 100 if max_deflection > 0 else 0
+        utilization = max(utilization_stress, utilization_deflection)
+
+        is_safe = utilization <= 100 and sigma <= self.Ry and deflection <= max_deflection
+
+        if not is_safe:
+            current_idx = -1
+            for i, p in enumerate(self.profiles["purlin"]):
+                if p["name"] == profile["name"]:
+                    current_idx = i
+                    break
+
+            if current_idx < len(self.profiles["purlin"]) - 1 and current_idx >= 0:
+                recommendation = self.profiles["purlin"][current_idx + 1]["name"]
+            else:
+                new_spacing = max(0.8, purlin_spacing - 0.2)
+                recommendation = f"Progon oralig'ini {new_spacing:.1f}m ga qisqartirish kerak"
+        else:
+            recommendation = profile["name"]
+
+        return {
+            "index": purlin_index,
+            "x": x,
+            "z": z,
+            "length_m": round(length, 2),
+            "load_q_Nm": round(q_max, 1),
+            "moment_Nm": round(M, 1),
+            "sigma_MPa": round(sigma / 1e6, 2),
+            "deflection_mm": round(deflection_mm, 2),
+            "max_deflection_mm": round(max_deflection_mm, 2),
+            "utilization": round(utilization, 1),
+            "profile": profile["name"],
+            "is_safe": is_safe,
+            "recommendation": recommendation,
+            "status": "✅ Yetarli" if is_safe else "❌ Yetarli emas",
+            "combo_name": combo_name
+        }
+
+    def analyze_bracing(self, bracing_index, x, z):
+        """Bog'lama tahlili - 100m bino uchun"""
+        if self.L > 60:
+            n_bracings = max(6, int(self.L / 10))
+            segment_length = self.L / n_bracings
+            length = math.sqrt(segment_length**2 + self.W**2) / 2
+        else:
+            n_bracings = max(2, int(self.L / 15))
+            segment_length = self.L / n_bracings
+            length = math.sqrt(self.L**2 + self.W**2) / 2
+        
+        D = self.materials.get("metal_kg", 15000) * 9.81 * 0.3
+        W = self.wind_kPa * 1000 * self.H * segment_length
+        E = D * self.seismic_coeff.get(self.seismic_zone, 0.10)
+        
+        F = 0
+        combo_name = ""
+        for combo in self.load_combos.get_combinations():
+            F_combo = combo["D"] * D + combo["W"] * W + combo["E"] * E
+            if F_combo > F:
+                F = F_combo
+                combo_name = combo["name"]
+        
+        profile = self._find_optimal_bracing_profile(F, length)
+        
+        A = profile["A"]
+        r = profile["r"]
+        
+        sigma = F / A
+        
+        lambda_ = length / r if r > 0 else 999
+        if lambda_ <= 105:
+            phi = 1 - 0.066 * (lambda_ / 100)**2
+        else:
+            phi = 0.35 / (lambda_ / 100)**2
+        
+        buckling_sigma = sigma / phi if phi > 0 else sigma * 10
+        
+        utilization = (max(sigma, buckling_sigma) / self.Ry) * 100 if self.Ry > 0 else 0
+        is_safe = utilization <= 100
+        
+        if not is_safe:
+            current_idx = -1
+            for i, p in enumerate(self.profiles["bracing"]):
+                if p["name"] == profile["name"]:
+                    current_idx = i
+                    break
+            
+            if current_idx < len(self.profiles["bracing"]) - 1 and current_idx >= 0:
+                recommendation = self.profiles["bracing"][current_idx + 1]["name"]
+            else:
+                recommendation = "Bog'lamalar sonini ko'paytirish kerak (oraliq 6m)"
+        else:
+            recommendation = profile["name"]
+        
+        return {
+            "index": bracing_index,
+            "x": x,
+            "z": z,
+            "length_m": round(length, 1),
+            "segment_m": round(segment_length, 1),
+            "force_kg": round(F / 9.81, 1),
+            "sigma_MPa": round(sigma / 1e6, 2),
+            "buckling_sigma_MPa": round(buckling_sigma / 1e6, 2),
+            "lambda": round(lambda_, 1),
+            "phi": round(phi, 3),
+            "utilization": round(utilization, 1),
+            "profile": profile["name"],
+            "is_safe": is_safe,
+            "recommendation": recommendation,
+            "status": "✅ Yetarli" if is_safe else "❌ Yetarli emas",
+            "combo_name": combo_name
+        }
+
+    # ============================================================
+    # 7. POYDEVOR HISOBI
+    # ============================================================
+    def analyze_foundations(self, results):
+        foundation_results = []
+        for col in results["columns"]:
+            foundation = self.foundation_designer.design_footing(
+                col["axial_force_kg"], 
+                col.get("moment_Nm", 0)
+            )
+            foundation["column_index"] = col["index"]
+            foundation["x"] = col["x"]
+            foundation["z"] = col["z"]
+            foundation_results.append(foundation)
+        return foundation_results
+
+    # ============================================================
+    # 8. AVTOMATIK OPTIMALLASHTIRISH
+    # ============================================================
+    def optimize_profiles(self, max_iterations=25):
+        """Profillarni va progon oralig'ini avtomatik optimallashtirish"""
+        results = None
+        
+        for iteration in range(max_iterations):
+            results = self.run_full_analysis()
+            
+            unsafe_found = False
+            need_reduce_spacing = False
+            
+            # Progonlarni tekshirish
+            for purlin in results["purlins"]:
+                if purlin["utilization"] > 100:
+                    unsafe_found = True
+                    
+                    current_idx = -1
+                    for i, p in enumerate(self.profiles["purlin"]):
+                        if p["name"] == purlin["profile"]:
+                            current_idx = i
+                            break
+                    
+                    if current_idx < len(self.profiles["purlin"]) - 1 and current_idx >= 0:
+                        purlin["profile"] = self.profiles["purlin"][current_idx + 1]["name"]
+                        purlin["recommendation"] = purlin["profile"]
+                    else:
+                        need_reduce_spacing = True
+            
+            if need_reduce_spacing:
+                new_spacing = max(0.8, self.purlin_spacing - 0.1)
+                self.purlin_spacing = new_spacing
+                print(f"   🔄 Progon oralig'i {new_spacing:.2f}m ga qisqartirildi")
+                continue
+            
+            # Fermalarni tekshirish
+            for truss in results["trusses"]:
+                if truss["utilization"] > 100:
+                    unsafe_found = True
+                    current_idx = -1
+                    for i, p in enumerate(self.profiles["truss"]):
+                        if p["name"] == truss["profile"]:
+                            current_idx = i
+                            break
+                    if current_idx < len(self.profiles["truss"]) - 1 and current_idx >= 0:
+                        truss["profile"] = self.profiles["truss"][current_idx + 1]["name"]
+                        truss["recommendation"] = truss["profile"]
+                    else:
+                        truss["recommendation"] = "Ferma balandligini oshirish kerak"
+            
+            # Ustunlar
+            for col in results["columns"]:
+                if col["utilization"] > 100:
+                    unsafe_found = True
+                    current_idx = -1
+                    for i, p in enumerate(self.profiles["column"]):
+                        if p["name"] == col["profile"]:
+                            current_idx = i
+                            break
+                    if current_idx < len(self.profiles["column"]) - 1 and current_idx >= 0:
+                        col["profile"] = self.profiles["column"][current_idx + 1]["name"]
+                        col["recommendation"] = col["profile"]
+            
+            # Bog'lamalar
+            for bracing in results["bracings"]:
+                if bracing["utilization"] > 100:
+                    unsafe_found = True
+                    current_idx = -1
+                    for i, p in enumerate(self.profiles["bracing"]):
+                        if p["name"] == bracing["profile"]:
+                            current_idx = i
+                            break
+                    if current_idx < len(self.profiles["bracing"]) - 1 and current_idx >= 0:
+                        bracing["profile"] = self.profiles["bracing"][current_idx + 1]["name"]
+                        bracing["recommendation"] = bracing["profile"]
+            
+            if not unsafe_found:
+                print(f"✅ Optimallashtirish {iteration + 1} iteratsiyada yakunlandi!")
+                break
+            
+            if iteration == max_iterations - 1:
+                print(f"⚠️ Optimallashtirish {max_iterations} iteratsiyadan keyin ham davom etmoqda")
+        
+        return results
+
+    # ============================================================
+    # 9. TO'LIQ TAHLIL
+    # ============================================================
+    def run_full_analysis(self):
+        results = {
+            "columns": [],
+            "trusses": [],
+            "purlins": [],
+            "bracings": [],
+            "summary": {}
+        }
+
+        # Ustunlar
+        for i in range(self.layout["n_cols_x"]):
+            for j in range(self.layout["n_cols_z"]):
+                x = i * self.layout["spacing_x"]
+                z = j * self.layout["spacing_z"]
+                idx = i * self.layout["n_cols_z"] + j
+                results["columns"].append(self.analyze_column(idx, x, z))
+
+        # Fermalar
+        for i in range(self.layout["n_cols_x"]):
+            x = i * self.layout["spacing_x"]
+            results["trusses"].append(self.analyze_truss(i, x))
+
+        # Progonlar
+        n_purlins = max(2, int(self.W / self.purlin_spacing))
+        for i in range(n_purlins):
+            t = (i + 0.5) / n_purlins
+            z = t * self.W
+            x = self.L / 2
+            results["purlins"].append(self.analyze_purlin(i, x, z))
+
+        # Bog'lamalar
+        if self.L > 60:
+            n_bracings = max(6, int(self.L / 10))
+        else:
+            n_bracings = max(2, int(self.L / 15))
+        
+        for i in range(n_bracings):
+            x_pos = (i + 0.5) * self.L / n_bracings
+            results["bracings"].append(self.analyze_bracing(i, x_pos, self.W/2))
+
+        # Poydevor hisobi
+        results["foundations"] = self.analyze_foundations(results)
+
+        # Xulosa
+        all_safe = True
+        unsafe_elements = []
+
+        for col in results["columns"]:
+            if not col["is_safe"]:
+                all_safe = False
+                unsafe_elements.append(f"Ustun #{col['index']} - {col['utilization']:.0f}% (Tavsiya: {col['recommendation']})")
+
+        for truss in results["trusses"]:
+            if not truss["is_safe"]:
+                all_safe = False
+                unsafe_elements.append(f"Ferma #{truss['index']} - {truss['utilization']:.0f}% (Tavsiya: {truss['recommendation']})")
+
+        for purlin in results["purlins"]:
+            if not purlin["is_safe"]:
+                all_safe = False
+                unsafe_elements.append(f"Progon #{purlin['index']} - {purlin['utilization']:.0f}% (Tavsiya: {purlin['recommendation']})")
+
+        for bracing in results["bracings"]:
+            if not bracing["is_safe"]:
+                all_safe = False
+                unsafe_elements.append(f"Bog'lama #{bracing['index']} - {bracing['utilization']:.0f}% (Tavsiya: {bracing['recommendation']})")
+
+        all_utils = []
+        for c in results["columns"]:
+            all_utils.append(c["utilization"])
+        for t in results["trusses"]:
+            all_utils.append(t["utilization"])
+        for p in results["purlins"]:
+            all_utils.append(p["utilization"])
+        for b in results["bracings"]:
+            all_utils.append(b["utilization"])
+        for f in results["foundations"]:
+            all_utils.append(f["utilization"])
+
+        max_util = max(all_utils) if all_utils else 0
+
+        results["summary"] = {
+            "total_elements": len(results["columns"]) + len(results["trusses"]) + len(results["purlins"]) + len(results["bracings"]),
+            "unsafe_count": len(unsafe_elements),
+            "all_safe": all_safe,
+            "unsafe_elements": unsafe_elements,
+            "max_utilization": max_util,
+            "purlin_spacing": self.purlin_spacing,
+            "n_columns": len(results["columns"]),
+            "n_trusses": len(results["trusses"]),
+            "n_purlins": len(results["purlins"]),
+            "n_bracings": len(results["bracings"])
+        }
+
+        return results
+
+
+
+# ============================================================
+# 11. TEST / ISHGA TUSHIRISH (100m BINO UCHUN)
+# ============================================================
+if __name__ == "__main__":
+    # 100x18x6 m bino parametrlari
+    params = {
+        "L": 100,
+        "W": 18,
+        "H": 6,
+        "roof_pitch": 12,
+        "column_spacing": 6.8,
+        "snow_kg_m2": 50,
+        "wind_kPa": 0.38,
+        "seismic_zone": 8,
+        "live_load_kg_m2": 200,
+        "soil_type": "O'rta qum",
+        "purlin_spacing": 1.5,
+        "fem_column_profile": "300x300x12",
+        "fem_truss_profile": "200x200x6",
+        "fem_purlin_profile": "160x80x4"
+    }
+    
+    materials = {"metal_kg": 45000}
+    
+    # FEM analizatorini yaratish
+    print("🚀 100m BINO UCHUN FEM TAHLILI BOSHLANDI...")
+    print("="*60)
+    
+    analyzer = FEMAnalyzer(params, materials)
+    
+    # Optimallashtirish bilan tahlil
+    results = analyzer.optimize_profiles(max_iterations=25)
+    
+    # Natijalarni chiqarish
+    print("\n" + "="*60)
+    print("📊 100m BINO FEM TAHLIL NATIJALARI")
+    print("="*60)
+    
+    print(f"\n📐 Bino o'lchamlari: {params['L']} x {params['W']} x {params['H']} m")
+    print(f"🏗️  Ustunlar: {analyzer.layout['n_cols_x']} x {analyzer.layout['n_cols_z']} = {analyzer.layout['n_cols_x'] * analyzer.layout['n_cols_z']} ta")
+    print(f"📏 Ustunlar oralig'i: {analyzer.layout['spacing_x']:.1f} m (uzunlik), {analyzer.layout['spacing_z']:.1f} m (kenglik)")
+    print(f"📏 Progon oralig'i: {results['summary']['purlin_spacing']:.2f} m")
+    
+    print(f"\n📈 Xulosa:")
+    print(f"   Jami elementlar: {results['summary']['total_elements']}")
+    print(f"   Xavfsiz elementlar: {results['summary']['total_elements'] - results['summary']['unsafe_count']}")
+    print(f"   Xavfli elementlar: {results['summary']['unsafe_count']}")
+    print(f"   Maksimal bandlik: {results['summary']['max_utilization']:.1f}%")
+    print(f"   Holat: {'✅ Barcha elementlar xavfsiz' if results['summary']['all_safe'] else '❌ Xavfli elementlar mavjud'}")
+    
+    if results['summary']['unsafe_elements']:
+        print(f"\n   ⚠️ Xavfli elementlar:")
+        for elem in results['summary']['unsafe_elements'][:5]:
+            print(f"      • {elem}")
+        if len(results['summary']['unsafe_elements']) > 5:
+            print(f"      • ... va {len(results['summary']['unsafe_elements']) - 5} ta boshqa element")
+    
+    # Stress map yaratish
+    print("\n📊 Stress map yaratilmoqda...")
+    fig = analyzer.create_stress_map(results)
+    plt.show()
+    
+    print("\n✅ Tahlil yakunlandi!")
 
 def create_construction_3d(L, W, H, roof_pitch,
                            window_count=4,
@@ -1386,10 +2225,16 @@ const matFrame    = new THREE.MeshStandardMaterial({{ color: 0x8a9aa8, roughness
 const matConcrete = new THREE.MeshStandardMaterial({{ color:0xc8cacb, roughness:0.9, metalness:0.0, envMapIntensity:0.3 }});
 const matDoorPanel= new THREE.MeshStandardMaterial({{ color:0x6a7a8a, metalness:0.4, roughness:0.4, envMapIntensity:0.6 }});
 const matDoorFrame= new THREE.MeshStandardMaterial({{ color:0x8a8a8a, metalness:0.4, roughness:0.4, envMapIntensity:0.6 }});
-const matGround   = new THREE.MeshStandardMaterial({{ color:0xa8a196, roughness:0.95, metalness:0.0, envMapIntensity:0.25 }});
+const matGround   = new THREE.MeshStandardMaterial({{ color:0xf0f1ee, roughness:0.92, metalness:0.0, envMapIntensity:0.25 }});
 const matCorrugated = new THREE.MeshStandardMaterial({{ color:0xccd2d8, roughness:0.5, metalness:0.1, side:THREE.DoubleSide, envMapIntensity:0.7 }});
 const matGusset   = new THREE.MeshStandardMaterial({{ color:0x5a6a7a, metalness:0.5, roughness:0.4, envMapIntensity:0.7 }});
 const matBolt     = new THREE.MeshStandardMaterial({{ color:0x3a4a5a, metalness:0.5, roughness:0.5, envMapIntensity:0.85 }});
+const matDoorTrack = new THREE.MeshStandardMaterial({{ color:0x4a5158, metalness:0.65, roughness:0.35, envMapIntensity:0.8 }});
+const matDoorHandle = new THREE.MeshStandardMaterial({{ color:0x2b2f33, metalness:0.7, roughness:0.3, envMapIntensity:0.9 }});
+const matDoorWindowGlass = new THREE.MeshPhysicalMaterial({{
+  color: 0x9fd0dd, transparent: true, opacity: 0.4, roughness: 0.08, metalness: 0.0,
+  side: THREE.DoubleSide, envMapIntensity: 1.2, clearcoat: 0.5, clearcoatRoughness: 0.15,
+}});
 
 // ============================================================
 // PROSEDURAL TEKSTURALAR — real metall/beton/o't ko'rinishi uchun
@@ -1489,30 +2334,35 @@ function makeGroundCanvas() {{
   const c = document.createElement('canvas');
   c.width = size; c.height = size;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#a8a196';
+  // Toza oq-kul rang asos (multfilmga o'xshagan jigar rang tuproq o'rniga)
+  ctx.fillStyle = '#f3f4f1';
   ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < 3500; i++) {{
+  // Juda mayin shovqin — betonga yaqin, lekin sezilarli dog'/rang lekesiz
+  for (let i = 0; i < 2200; i++) {{
     const x = Math.random() * size, y = Math.random() * size;
-    const shade = 95 + Math.random() * 70;
-    ctx.fillStyle = `rgba(${{Math.round(shade)}}, ${{Math.round(shade*0.94)}}, ${{Math.round(shade*0.86)}}, 0.5)`;
-    ctx.fillRect(x, y, 1.6, 1.6);
+    const shade = 235 + Math.random() * 18;
+    ctx.fillStyle = `rgba(${{Math.round(shade)}}, ${{Math.round(shade)}}, ${{Math.round(shade*0.99)}}, 0.35)`;
+    ctx.fillRect(x, y, 1.4, 1.4);
   }}
-  for (let i = 0; i < 6; i++) {{
-    const x = Math.random() * size, y = Math.random() * size, r = 10 + Math.random() * 22;
-    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-    grad.addColorStop(0, 'rgba(90,84,72,0.30)');
-    grad.addColorStop(1, 'rgba(90,84,72,0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+  // Oq katakli grid chiziqlari — CAD/blueprint uslubidagi toza yer
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 2;
+  const cell = size / 4;
+  for (let i = 0; i <= 4; i++) {{
+    ctx.beginPath(); ctx.moveTo(i * cell, 0); ctx.lineTo(i * cell, size); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i * cell); ctx.lineTo(size, i * cell); ctx.stroke();
   }}
+  ctx.strokeStyle = 'rgba(210,213,206,0.5)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(1, 1, size - 2, size - 2);
   return c;
 }}
 
 // --- Tom VA devor uchun BIR XIL sendvich-panel uslubi (faqat rang tusi farqlanadi) ---
-const roofBaseHex      = IS_LSTK ? '#cdd6dc' : '#9aa8b1';
-const roofHighlightHex = IS_LSTK ? '#f2f6f8' : '#c3cdd3';
-const roofShadowHex    = IS_LSTK ? '#a4b0b8' : '#7e8b95';
-const roofSeamHex      = IS_LSTK ? '#7c8890' : '#5b6570';
+const roofBaseHex      = '#f5f6f3';
+const roofHighlightHex = '#ffffff';
+const roofShadowHex    = '#e0e2dc';
+const roofSeamHex      = '#cfd2ca';
 const roofRepeatX = Math.max(2, Math.round(L / 2.4));
 const roofColorTex = makeTiledTexture(makeSandwichPanelCanvas(roofBaseHex, roofHighlightHex, roofShadowHex, roofSeamHex), roofRepeatX, 3, true);
 const roofRoughTex  = makeTiledTexture(makeNoiseCanvas(128, [130,130,130], 30), roofRepeatX, 3, false);
@@ -1522,10 +2372,10 @@ matCorrugated.color.set(0xffffff);
 matCorrugated.roughness = 1.0;
 matCorrugated.metalness = IS_LSTK ? 0.55 : 0.25;
 
-const wallBaseHex      = '#eef0ea';
+const wallBaseHex      = '#f7f8f5';
 const wallHighlightHex = '#ffffff';
-const wallShadowHex    = '#c7cbc2';
-const wallSeamHex      = '#aab0a6';
+const wallShadowHex    = '#e2e4de';
+const wallSeamHex      = '#d3d6cd';
 const wallRepeatX = Math.max(2, Math.round(L / 3));
 const wallRepeatY = Math.max(1, Math.round(H / 2.4));
 const wallColorTex = makeTiledTexture(makeSandwichPanelCanvas(wallBaseHex, wallHighlightHex, wallShadowHex, wallSeamHex), wallRepeatX, wallRepeatY, true);
@@ -1668,6 +2518,9 @@ scene.add(platform);
 const floorColorTex = makeTiledTexture(makeNoiseCanvas(256, [214, 210, 196], 14), Math.max(2, Math.round(L / 3)), Math.max(2, Math.round(W / 3)), true);
 const floorRoughTex  = makeTiledTexture(makeNoiseCanvas(128, [190,190,190], 30), Math.max(2, Math.round(L / 3)), Math.max(2, Math.round(W / 3)), false);
 const matInteriorFloor = new THREE.MeshStandardMaterial({{ color:0xffffff, map: floorColorTex, roughnessMap: floorRoughTex, roughness:1.0, metalness:0.0, envMapIntensity:0.35 }});
+matInteriorFloor.polygonOffset = true;
+matInteriorFloor.polygonOffsetFactor = -1;
+matInteriorFloor.polygonOffsetUnits = -1;
 const interiorFloor = new THREE.Mesh(new THREE.PlaneGeometry(L - 0.05, W - 0.05), matInteriorFloor);
 interiorFloor.rotation.x = -Math.PI / 2;
 interiorFloor.position.set(L/2, 0.175, W/2);
@@ -1676,6 +2529,18 @@ scene.add(interiorFloor);
 
 const buildingGroup = new THREE.Group();
 scene.add(buildingGroup);
+
+// --- Ustun/balka po'lat sirti uchun mayin cho'tka izlari + qoralama teksturasi ---
+const steelBeamColorTex = makeTiledTexture(makeNoiseCanvas(128, [104, 112, 122], 20), 1, 6, true);
+const steelBeamRoughTex  = makeTiledTexture(makeNoiseCanvas(128, [110,110,110], 35), 1, 6, false);
+matBeam.map = steelBeamColorTex;
+matBeam.roughnessMap = steelBeamRoughTex;
+matBeam.color.set(0xffffff);
+matBeam.roughness = 1.0;
+matBeamWeb.map = steelBeamColorTex;
+matBeamWeb.roughnessMap = steelBeamRoughTex;
+matBeamWeb.color.set(0xffffff);
+matBeamWeb.roughness = 1.0;
 
 // ============================================================
 // COLUMNS
@@ -1691,30 +2556,71 @@ function makeIBeamProfile() {{
 }}
 const ibeamProfile = makeIBeamProfile();
 function makeIBeam(length, material) {{
-  const geo = new THREE.ExtrudeGeometry(ibeamProfile, {{ steps:1, depth:length, bevelEnabled:false }});
+  // Yengil bevel — qirralarga real hadlangan po'lat profil hissi beradi (o'takatlik/gulatak yo'q)
+  const geo = new THREE.ExtrudeGeometry(ibeamProfile, {{
+    steps:1, depth:length, bevelEnabled:true, bevelThickness:0.004, bevelSize:0.004, bevelSegments:1
+  }});
   const mesh = new THREE.Mesh(geo, material);
   mesh.castShadow = true; mesh.receiveShadow = true;
   return mesh;
 }}
+
 function addColumn(x, z) {{
-  const col = makeIBeam(H, matBeam);
+  const colHeight = H - 0.10;
+  const col = makeIBeam(colHeight, matBeam);
   col.rotation.x = -Math.PI/2;
   // TUZATILDI: profil lokal X (bf-yo'nalish) allaqachon markazlashgan -> offsetsiz "x";
   // profil lokal Y (IB_H-yo'nalish) dunyoda Z ga aylanadi -> markazlash uchun +IB_H/2
-  col.position.set(x, 0, z + IB_H/2);
+  col.position.set(x, 0.10, z + IB_H/2);   // ustun asosi grout/plita ustida biroz ko'tarilgan, tepasi H da qoladi
   colGroup.add(col);
-  const basePlate = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.025, 0.45), matSteel);
-  basePlate.position.set(x, 0.025, z);
+
+  // --- Fundament plitasi (base plate) — grout tirqishi bilan ---
+  const basePlateSize = 0.52, basePlateT = 0.03;
+  const basePlate = new THREE.Mesh(new THREE.BoxGeometry(basePlateSize, basePlateT, basePlateSize), matSteel);
+  basePlate.position.set(x, 0.08 + basePlateT/2, z);
   basePlate.castShadow = true;
   basePlate.receiveShadow = true;
   colGroup.add(basePlate);
-  for (const dx of [-0.16, 0.16]) {{
-    for (const dz of [-0.16, 0.16]) {{
-      const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.08, 6), matSteel);
-      bolt.position.set(x + dx, 0.05, z + dz);
-      colGroup.add(bolt);
+
+  // Grout qatlami (plita ostida, beton bilan ustun orasidagi joylashtiruvchi qatlam)
+  const grout = new THREE.Mesh(new THREE.BoxGeometry(basePlateSize + 0.03, 0.05, basePlateSize + 0.03), matConcrete);
+  grout.position.set(x, 0.025 + 0.025, z);
+  grout.receiveShadow = true;
+  colGroup.add(grout);
+
+  // --- Ankr boltlar (nut + washer bilan, plitadan chiqib turadi) ---
+  for (const dx of [-0.19, 0.19]) {{
+    for (const dz of [-0.19, 0.19]) {{
+      const boltShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.09, 8), matBolt);
+      boltShaft.position.set(x + dx, 0.125, z + dz);
+      colGroup.add(boltShaft);
+      const washer = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.012, 10), matBolt);
+      washer.position.set(x + dx, 0.08 + basePlateT + 0.006, z + dz);
+      colGroup.add(washer);
+      const nut = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.03, 6), matBolt);
+      nut.position.set(x + dx, 0.08 + basePlateT + 0.028, z + dz);
+      colGroup.add(nut);
     }}
   }}
+
+  // --- Poydevor mahkamlash burchak plitalari (base stiffener gussets) — flanets ikki tomonida ---
+  [-1, 1].forEach(side => {{
+    const stf = new THREE.Shape();
+    stf.moveTo(0, 0); stf.lineTo(0.14, 0); stf.lineTo(0, 0.20); stf.lineTo(0, 0);
+    const stfGeo = new THREE.ExtrudeGeometry(stf, {{ depth: 0.012, bevelEnabled:false }});
+    const stfMesh = new THREE.Mesh(stfGeo, matGusset);
+    stfMesh.rotation.y = side > 0 ? 0 : Math.PI;
+    stfMesh.rotation.x = -Math.PI / 2;
+    stfMesh.position.set(x + side * (IB_TW/2), 0.11, z + IB_H/2 + side * 0.006);
+    stfMesh.castShadow = true;
+    colGroup.add(stfMesh);
+  }});
+
+  // --- Ustun tepasidagi biriktiruvchi plita (cap plate) — trussga ulanish nuqtasi ---
+  const capPlate = new THREE.Mesh(new THREE.BoxGeometry(IB_BF + 0.06, 0.02, IB_H + 0.06), matSteel);
+  capPlate.position.set(x, H - 0.01, z + IB_H/2);
+  capPlate.castShadow = true;
+  colGroup.add(capPlate);
 }}
 
 for (let i = 0; i < N_COLS_X; i++) {{
@@ -1958,40 +2864,65 @@ function addWallSegment(group, length, height, axis, normalSign, fixedCoord, seg
   return mesh;
 }}
 
+// ============================================================
+// DERAZA — REALISTIK OYNA: chuqur profilli ramka + tashqi tokcha (sill) +
+// 2x2 impost (mullion) panjarasi + ichki/tashqi steklo qatlami bilan.
+// ============================================================
 function addWindowMesh(axis, fixedCoord, normalSign, centerAlong, centerY) {{
   const glassT = T * 0.5;
-  const frameT = T + 0.04;
-  let g, f, mvv, mhh;
-  if (axis === 'x') {{
-    g  = new THREE.BoxGeometry(WIN_W, WIN_H, glassT);
-    f  = new THREE.BoxGeometry(WIN_W + 0.08, WIN_H + 0.08, frameT);
-    mvv = new THREE.BoxGeometry(0.035, WIN_H, glassT + 0.015);
-    mhh = new THREE.BoxGeometry(WIN_W, 0.035, glassT + 0.015);
-  }} else {{
-    g  = new THREE.BoxGeometry(glassT, WIN_H, WIN_W);
-    f  = new THREE.BoxGeometry(frameT, WIN_H + 0.08, WIN_W + 0.08);
-    mvv = new THREE.BoxGeometry(glassT + 0.015, WIN_H, 0.035);
-    mhh = new THREE.BoxGeometry(glassT + 0.015, 0.035, WIN_W);
+  const frameDepth = T + 0.10;      // ramka devordan chuqurroq chiqib turadi (relyef)
+  const frameBar = 0.08;            // ramka kesim kengligi
+  const mullionBar = 0.045;         // ichki bo'linish (impost) kengligi
+
+  const grp = new THREE.Group();
+
+  function boxAt(w, h, d, mat, ox, oy, oz) {{
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(ox, oy, oz);
+    m.castShadow = true;
+    return m;
   }}
-  const glassMesh = new THREE.Mesh(g, matGlass);
-  const frameMesh = new THREE.Mesh(f, matFrame);
-  frameMesh.castShadow = true;
+
+  // Tashqi ramka (4 tomon) — old devordan biroz chiqib turadigan chuqur profil
+  const outerW = WIN_W + frameBar * 2;
+  const outerH = WIN_H + frameBar * 2;
   if (axis === 'x') {{
-    glassMesh.position.set(centerAlong, centerY, fixedCoord);
-    frameMesh.position.set(centerAlong, centerY, fixedCoord);
+    grp.add(boxAt(outerW, frameBar, frameDepth, matFrame, 0, WIN_H/2 + frameBar/2, 0));   // tepa
+    grp.add(boxAt(outerW, frameBar, frameDepth, matFrame, 0, -WIN_H/2 - frameBar/2, 0));  // tag
+    grp.add(boxAt(frameBar, WIN_H, frameDepth, matFrame, -WIN_W/2 - frameBar/2, 0, 0));   // chap
+    grp.add(boxAt(frameBar, WIN_H, frameDepth, matFrame, WIN_W/2 + frameBar/2, 0, 0));    // o'ng
+    // Ichki impost — vertikal (markazda) va gorizontal (markazda) — 2x2 panjaralar
+    grp.add(boxAt(mullionBar, WIN_H, frameDepth * 0.85, matFrame, 0, 0, 0));
+    grp.add(boxAt(WIN_W, mullionBar, frameDepth * 0.85, matFrame, 0, 0, 0));
+    // Steklo — 4 bo'lakka bo'lingan (impostlar orasida), ozgina orqaga cho'kkan
+    const gw = (WIN_W - mullionBar) / 2, gh = (WIN_H - mullionBar) / 2;
+    [[-1,1],[1,1],[-1,-1],[1,-1]].forEach(([sx, sy]) => {{
+      const gl = boxAt(gw - 0.01, gh - 0.01, glassT, matGlass, sx*(gw/2 + mullionBar/2), sy*(gh/2 + mullionBar/2), -0.015);
+      gl.castShadow = false;
+      grp.add(gl);
+    }});
+    // Tashqi tokcha (sill) — pastda, devordan tashqariga chiqib turadi
+    grp.add(boxAt(outerW + 0.12, 0.05, frameDepth + 0.14, matPanelTrim, 0, -WIN_H/2 - frameBar - 0.02, 0.02));
+    grp.position.set(centerAlong, centerY, fixedCoord + (frameDepth/2 - T/2) * normalSign);
   }} else {{
-    glassMesh.position.set(fixedCoord, centerY, centerAlong);
-    frameMesh.position.set(fixedCoord, centerY, centerAlong);
+    grp.add(boxAt(frameDepth, frameBar, outerW, matFrame, 0, WIN_H/2 + frameBar/2, 0));
+    grp.add(boxAt(frameDepth, frameBar, outerW, matFrame, 0, -WIN_H/2 - frameBar/2, 0));
+    grp.add(boxAt(frameDepth, WIN_H, frameBar, matFrame, 0, 0, -WIN_W/2 - frameBar/2));
+    grp.add(boxAt(frameDepth, WIN_H, frameBar, matFrame, 0, 0, WIN_W/2 + frameBar/2));
+    grp.add(boxAt(frameDepth * 0.85, WIN_H, mullionBar, matFrame, 0, 0, 0));
+    grp.add(boxAt(frameDepth * 0.85, mullionBar, WIN_W, matFrame, 0, 0, 0));
+    const gw = (WIN_W - mullionBar) / 2, gh = (WIN_H - mullionBar) / 2;
+    [[-1,1],[1,1],[-1,-1],[1,-1]].forEach(([sx, sy]) => {{
+      const gl = boxAt(glassT, gh - 0.01, gw - 0.01, matGlass, -0.015, sy*(gh/2 + mullionBar/2), sx*(gw/2 + mullionBar/2));
+      gl.castShadow = false;
+      grp.add(gl);
+    }});
+    grp.add(boxAt(frameDepth + 0.14, 0.05, outerW + 0.12, matPanelTrim, 0.02, -WIN_H/2 - frameBar - 0.02, 0));
+    grp.position.set(fixedCoord + (frameDepth/2 - T/2) * normalSign, centerY, centerAlong);
   }}
-  windowGroup.add(glassMesh);
-  windowGroup.add(frameMesh);
-  const mvMesh = new THREE.Mesh(mvv, matFrame);
-  const mhMesh = new THREE.Mesh(mhh, matFrame);
-  mvMesh.position.copy(glassMesh.position);
-  mhMesh.position.copy(glassMesh.position);
-  windowGroup.add(mvMesh);
-  windowGroup.add(mhMesh);
-  return {{glass: glassMesh, frame: frameMesh}};
+
+  windowGroup.add(grp);
+  return grp;
 }}
 
 function buildWallWithOpenings(group, totalLength, height, axis, fixedCoord, normalSign, baseX_or_Z, openings) {{
@@ -2070,6 +3001,177 @@ function addGirtSegments(totalLength, gh, axis, fixedCoord, normalSign, baseX_or
 // ============================================================
 
 // ============================================================
+// REALISTIK DARVOZA (SEKSIYALI/ROLIKLI SANOAT DARVOZASI) — old/orqa katta eshiklar
+// Haqiqiy sanoat seksiyali darvozalariga o'xshash: gorizontal panellar,
+// har panelda relyefli qirralar, yuqori panelda oyna qatori, yon relslar (tracklar)
+// va rolikchalar, ustki header karnizi.
+// ============================================================
+function addSectionalGateDoor(doorX, wallZ, normalSign, dw, dh) {{
+  const grp = new THREE.Group();
+  const nPanels = 4;
+  const panelH = dh / nPanels;
+  const panelThick = 0.07;
+  const gap = 0.015; // panellar orasidagi qorong'i chok
+
+  for (let i = 0; i < nPanels; i++) {{
+    const py = (i + 0.5) * panelH;
+    // Asosiy panel tanasi
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(dw - 0.06, panelH - gap, panelThick), matDoorPanel);
+    panel.position.set(0, py, 0);
+    panel.castShadow = true;
+    panel.receiveShadow = true;
+    grp.add(panel);
+
+    // Panel yuzasidagi gorizontal relyef chiziqlar (real seksiyali darvoza tarnovi)
+    const ribTop = new THREE.Mesh(new THREE.BoxGeometry(dw - 0.10, 0.028, panelThick + 0.012), matDoorFrame);
+    ribTop.position.set(0, py + panelH/2 - 0.05, 0.006 * (normalSign || 1));
+    grp.add(ribTop);
+
+    // Vertikal ingichka relyef chiziqlari (panel bo'ylab, metall list ko'rinishi)
+    const vCount = 5;
+    for (let v = 0; v < vCount; v++) {{
+      const vx = -dw/2 + 0.12 + v * (dw - 0.24) / (vCount - 1);
+      const vLine = new THREE.Mesh(new THREE.BoxGeometry(0.02, panelH - gap - 0.05, panelThick + 0.01), matSteel);
+      vLine.position.set(vx, py, 0.005 * (normalSign || 1));
+      grp.add(vLine);
+    }}
+
+    // Yuqori panelda kichik oyna qatori (ko'p sanoat darvozalarida standart)
+    if (i === nPanels - 1) {{
+      const winCount = Math.max(2, Math.min(4, Math.round(dw / 3)));
+      const winW = Math.min(0.9, (dw - 0.4) / winCount - 0.15);
+      const winH = panelH * 0.5;
+      for (let wi = 0; wi < winCount; wi++) {{
+        const wx = -dw/2 + (wi + 0.5) * (dw / winCount);
+        const winGlass = new THREE.Mesh(new THREE.BoxGeometry(winW, winH, panelThick * 0.4), matDoorWindowGlass);
+        winGlass.position.set(wx, py, 0.01 * (normalSign || 1));
+        grp.add(winGlass);
+        const winFrame = new THREE.Mesh(new THREE.BoxGeometry(winW + 0.05, winH + 0.05, panelThick * 0.55), matDoorFrame);
+        winFrame.position.set(wx, py, 0.005 * (normalSign || 1));
+        grp.add(winFrame);
+      }}
+    }}
+  }}
+
+  // Tashqi qalin darvoza ramkasi (kosougolnik) — chuqurroq, haqiqiy relyef beradi
+  const frameDepth = panelThick + 0.10;
+  const frameBar = 0.14;
+  const outerW = dw + frameBar * 1.2;
+  const outerH = dh + frameBar * 1.2;
+  const fTop = new THREE.Mesh(new THREE.BoxGeometry(outerW, frameBar, frameDepth), matDoorFrame);
+  fTop.position.set(0, dh + frameBar/2, 0);
+  grp.add(fTop);
+  const fLeft = new THREE.Mesh(new THREE.BoxGeometry(frameBar, dh + frameBar, frameDepth), matDoorFrame);
+  fLeft.position.set(-dw/2 - frameBar/2, dh/2, 0);
+  grp.add(fLeft);
+  const fRight = fLeft.clone();
+  fRight.position.x = dw/2 + frameBar/2;
+  grp.add(fRight);
+
+  // Yon relslar (track) — vertikal metall channel + rolikchalar, real darvoza mexanizmi hissi
+  [-1, 1].forEach(side => {{
+    const trackX = side * (dw/2 + frameBar + 0.03);
+    const track = new THREE.Mesh(new THREE.BoxGeometry(0.06, dh + 0.3, 0.10), matDoorTrack);
+    track.position.set(trackX, dh/2, panelThick/2 + 0.05);
+    track.castShadow = true;
+    grp.add(track);
+    const rollerCount = 5;
+    for (let r = 0; r < rollerCount; r++) {{
+      const roller = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.05, 8), matBolt);
+      roller.rotation.z = Math.PI / 2;
+      roller.position.set(trackX, (r + 0.5) * (dh / rollerCount), panelThick/2 + 0.05);
+      grp.add(roller);
+    }}
+  }});
+
+  grp.position.set(doorX, 0, wallZ);
+  return grp;
+}}
+
+// ============================================================
+// REALISTIK PIYODALAR (PERSONNEL) ESHIGI — chap/o'ng kichik darvozalar
+// Bitta qanotli, botiq panelli, dastak+petla+plintus bilan haqiqiy eshik ko'rinishi.
+// ============================================================
+function addPersonnelDoor(doorPos, fixedX, normalSign, dw, dh, axis) {{
+  const grp = new THREE.Group();
+  const leafT = 0.055;
+  const inset = 0.05;
+
+  // Asosiy qanot (leaf)
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(dw - 0.08, dh - 0.08, leafT), matDoorPanel);
+  leaf.position.set(0, dh/2, 0);
+  leaf.castShadow = true;
+  grp.add(leaf);
+
+  // Botiq panel relyefi (yuqori katta panel + pastki kichik panel — klassik metall eshik)
+  const panelInsetMat = matDoorFrame;
+  const upperPanel = new THREE.Mesh(new THREE.BoxGeometry(dw - 0.08 - inset*2, (dh - 0.08) * 0.62, 0.012), panelInsetMat);
+  upperPanel.position.set(0, dh * 0.62, leafT/2 - 0.006);
+  grp.add(upperPanel);
+  const lowerPanel = new THREE.Mesh(new THREE.BoxGeometry(dw - 0.08 - inset*2, (dh - 0.08) * 0.28, 0.012), panelInsetMat);
+  lowerPanel.position.set(0, dh * 0.18, leafT/2 - 0.006);
+  grp.add(lowerPanel);
+
+  // Kichik ko'rish oynasi (vision window) — yuqori panel markazida
+  const visW = Math.min(dw * 0.42, 0.5);
+  const visH = Math.min(dh * 0.16, 0.4);
+  const visGlass = new THREE.Mesh(new THREE.BoxGeometry(visW, visH, leafT * 0.5), matDoorWindowGlass);
+  visGlass.position.set(0, dh * 0.72, leafT/2 - 0.01);
+  grp.add(visGlass);
+  const visFrame = new THREE.Mesh(new THREE.BoxGeometry(visW + 0.05, visH + 0.05, leafT * 0.65), matDoorFrame);
+  visFrame.position.set(0, dh * 0.72, leafT/2 - 0.008);
+  grp.add(visFrame);
+
+  // Plintus (kick plate) — pastda tepki plastinka
+  const kick = new THREE.Mesh(new THREE.BoxGeometry(dw - 0.10, dh * 0.14, leafT + 0.01), matSteel);
+  kick.position.set(0, dh * 0.08, leafT/2 - 0.004);
+  grp.add(kick);
+
+  // Dastak (lever handle) — bir tomonda
+  const handleSide = 0.32;
+  const handleBase = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.05, 10), matDoorHandle);
+  handleBase.rotation.x = Math.PI/2;
+  handleBase.position.set(dw/2 - handleSide, dh * 0.5, leafT/2 + 0.02);
+  grp.add(handleBase);
+  const handleLever = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.03), matDoorHandle);
+  handleLever.position.set(dw/2 - handleSide - 0.07, dh * 0.5, leafT/2 + 0.045);
+  grp.add(handleLever);
+
+  // Petlalar (hinges) — chap tomonda 3 dona
+  [0.18, 0.5, 0.82].forEach(t => {{
+    const hinge = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.14, leafT + 0.02), matSteel);
+    hinge.position.set(-dw/2 + 0.05, dh * t, 0);
+    grp.add(hinge);
+  }});
+
+  // Eshik romi (frame/jamb) — chuqur, real ustun kabi ko'rinadi
+  const frameBar = 0.10;
+  const frameDepth = leafT + 0.10;
+  const fTop = new THREE.Mesh(new THREE.BoxGeometry(dw + frameBar * 1.6, frameBar, frameDepth), matDoorFrame);
+  fTop.position.set(0, dh + frameBar/2, 0);
+  grp.add(fTop);
+  const fLeft = new THREE.Mesh(new THREE.BoxGeometry(frameBar, dh + frameBar, frameDepth), matDoorFrame);
+  fLeft.position.set(-dw/2 - frameBar/2, dh/2, 0);
+  grp.add(fLeft);
+  const fRight = fLeft.clone();
+  fRight.position.x = dw/2 + frameBar/2;
+  grp.add(fRight);
+  // Bosag'a (threshold)
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(dw + frameBar * 1.6, 0.04, frameDepth), matConcrete);
+  sill.position.set(0, 0.02, 0);
+  grp.add(sill);
+
+  if (axis === 'x') {{
+    grp.position.set(doorPos, 0, fixedX);
+  }} else {{
+    // 'z' devor (chap/o'ng) — 90 gradusga aylantirib X o'qi bo'ylab qo'yamiz
+    grp.rotation.y = Math.PI / 2;
+    grp.position.set(fixedX, 0, doorPos);
+  }}
+  return grp;
+}}
+
+// ============================================================
 // DEVOR VA EShIKLARNI QURISH
 // ============================================================
 function buildAllWalls() {{
@@ -2146,83 +3248,36 @@ function buildAllWalls() {{
     wallGirtHeightsRight.forEach(gh => addGirtSegments(W, gh, 'z', L, 1, 0, rightOpenings));
   }}
 
-  // ===== DARVOZALAR =====
+  // ===== DARVOZALAR (OLD/ORQA — seksiyali sanoat darvozasi ko'rinishida) =====
   const doorZ_front = W + T/2 + 0.04;
   DOOR_FRONT_POSITIONS.forEach((doorX) => {{
     const dw = Math.max(1.0, DOOR_FRONT_W);
     const dh = Math.max(1.0, DOOR_FRONT_H);
-    const panelWidth = dw;
-    const panelHeight = dh / 4;
-    const panelThick = 0.05;
-    for (let i = 0; i < 4; i++) {{
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(panelWidth - 0.1, panelHeight - 0.02, panelThick), matDoorPanel);
-      panel.position.set(doorX, (i + 0.5) * panelHeight, doorZ_front);
-      panel.castShadow = true;
-      doorGroup.add(panel);
-      for (let v = 0; v < 4; v++) {{
-        const vertLine = new THREE.Mesh(new THREE.BoxGeometry(0.012, panelHeight - 0.04, panelThick + 0.01), matSteel);
-        vertLine.position.set(doorX - panelWidth/2 + 0.15 + v * (panelWidth - 0.3)/3, (i + 0.5) * panelHeight, doorZ_front);
-        doorGroup.add(vertLine);
-      }}
-    }}
-    const doorFrameOuter = new THREE.Mesh(new THREE.BoxGeometry(dw + 0.15, dh + 0.15, 0.08), matDoorFrame);
-    doorFrameOuter.position.set(doorX, dh/2, W + T/2 + 0.01);
-    doorGroup.add(doorFrameOuter);
-    const doorFrameInner = new THREE.Mesh(new THREE.BoxGeometry(dw - 0.02, dh - 0.02, 0.06), matSteel);
-    doorFrameInner.position.set(doorX, dh/2, W + T/2 + 0.03);
-    doorGroup.add(doorFrameInner);
+    const gate = addSectionalGateDoor(doorX, doorZ_front, 1, dw, dh);
+    doorGroup.add(gate);
   }});
 
   const doorZ_back = -T/2 - 0.04;
   DOOR_BACK_POSITIONS.forEach((doorX) => {{
     const dw = Math.max(1.0, DOOR_BACK_W);
     const dh = Math.max(1.0, DOOR_BACK_H);
-    const panelWidth = dw;
-    const panelHeight = dh / 4;
-    const panelThick = 0.05;
-    for (let i = 0; i < 4; i++) {{
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(panelWidth - 0.1, panelHeight - 0.02, panelThick), matDoorPanel);
-      panel.position.set(doorX, (i + 0.5) * panelHeight, doorZ_back);
-      panel.castShadow = true;
-      doorGroup.add(panel);
-    }}
-    const doorFrameOuter = new THREE.Mesh(new THREE.BoxGeometry(dw + 0.15, dh + 0.15, 0.08), matDoorFrame);
-    doorFrameOuter.position.set(doorX, dh/2, -T/2 - 0.01);
-    doorGroup.add(doorFrameOuter);
+    const gate = addSectionalGateDoor(doorX, doorZ_back, -1, dw, dh);
+    doorGroup.add(gate);
   }});
 
-  const doorX_left = -T/2 - 0.04;
+  // ===== ESHIKLAR (CHAP/O'NG — piyodalar eshigi ko'rinishida) =====
   DOOR_LEFT_POSITIONS.forEach((doorZ) => {{
     const dw = Math.max(1.0, DOOR_LEFT_W);
     const dh = Math.max(1.0, DOOR_LEFT_H);
-    const panelHeight = dh / 4;
-    const panelThick = 0.05;
-    for (let i = 0; i < 4; i++) {{
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(panelThick, panelHeight - 0.02, dw - 0.1), matDoorPanel);
-      panel.position.set(doorX_left, (i + 0.5) * panelHeight, doorZ);
-      panel.castShadow = true;
-      doorGroup.add(panel);
-    }}
-    const doorFrameOuter = new THREE.Mesh(new THREE.BoxGeometry(0.08, dh + 0.15, dw + 0.15), matDoorFrame);
-    doorFrameOuter.position.set(-T/2 - 0.01, dh/2, doorZ);
-    doorGroup.add(doorFrameOuter);
+    const door = addPersonnelDoor(doorZ, -T/2 - 0.04, -1, dw, dh, 'z');
+    doorGroup.add(door);
   }});
 
-  const doorX_right = L + T/2 + 0.04;
   DOOR_RIGHT_POSITIONS.forEach((doorZ) => {{
     const dw = Math.max(1.0, DOOR_RIGHT_W);
     const dh = Math.max(1.0, DOOR_RIGHT_H);
-    const panelHeight = dh / 4;
-    const panelThick = 0.05;
-    for (let i = 0; i < 4; i++) {{
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(panelThick, panelHeight - 0.02, dw - 0.1), matDoorPanel);
-      panel.position.set(doorX_right, (i + 0.5) * panelHeight, doorZ);
-      panel.castShadow = true;
-      doorGroup.add(panel);
-    }}
-    const doorFrameOuter = new THREE.Mesh(new THREE.BoxGeometry(0.08, dh + 0.15, dw + 0.15), matDoorFrame);
-    doorFrameOuter.position.set(L + T/2 + 0.01, dh/2, doorZ);
-    doorGroup.add(doorFrameOuter);
+    const door = addPersonnelDoor(doorZ, L + T/2 + 0.04, 1, dw, dh, 'z');
+    doorGroup.add(door);
   }});
 
   rebuildDoorHitboxes();
@@ -2465,7 +3520,7 @@ function showQuakeResult() {{
   el.style.display = 'block';
 }}
 
-const grid = new THREE.GridHelper(Math.max(L, W) * 3, 40, 0xb8c2c8, 0xd6dde1);
+const grid = new THREE.GridHelper(Math.max(L, W) * 3, 40, 0xe8eae5, 0xf5f6f3);
 grid.position.set(L/2, 0.001, W/2);
 grid.material.transparent = true;
 grid.material.opacity = 0.4;
@@ -2759,6 +3814,8 @@ setTimeout(() => {{ const l = document.getElementById('loading'); if (l) l.style
 </body>
 </html>"""
     return html
+
+
 def calculate_door_positions(length, count, door_width):
     """Darvozalar joylashuvini hisoblash"""
     positions = []
@@ -4301,7 +5358,66 @@ def construction_sidebar():
                 step=50.0, 
                 key="price_metal_connection"
             )
-        
+        # Sidebarga FEM sozlamalari qo'shish
+        with st.sidebar.expander("🔬 FEM sozlamalari", expanded=False):
+            st.caption("FEM tahlili uchun parametrlar")
+            
+            # Profil tanlash (foydalanuvchi so'ragandek)
+            st.markdown("#### Profil tanlash")
+            
+            # Ustun profili
+            column_profile = st.selectbox(
+                "Ustun profili",
+                ["200x200x6", "200x200x8", "250x250x8", "250x250x10", "300x300x10", "300x300x12"],
+                index=0,
+                key="fem_column_profile"
+            )
+            
+            # Ferma profili
+            truss_profile = st.selectbox(
+                "Ferma profili",
+                ["60x60x3", "60x60x4", "80x80x3", "80x80x4", "100x100x3", "100x100x4"],
+                index=0,
+                key="fem_truss_profile"
+            )
+            
+            # Progon profili
+            purlin_profile_fem = st.selectbox(
+                "Progon profili",
+                ["80x40x3", "80x40x4", "100x50x3", "100x50x4", "120x60x3", "120x60x4"],
+                index=0,
+                key="fem_purlin_profile"
+            )
+            
+            # Bog'lama profili
+            bracing_profile_fem = st.selectbox(
+                "Bog'lama profili",
+                ["Shveller 10P", "Shveller 12P", "Shveller 14P", "Shveller 16P", "Shveller 18P"],
+                index=2,
+                key="fem_bracing_profile"
+            )
+            
+            st.divider()
+            
+            # Yuk parametrlari
+            st.markdown("#### Yuk parametrlari")
+            snow_load_fem = st.number_input(
+                "Qor yuki (kg/m²)",
+                min_value=0.0,
+                max_value=300.0,
+                value=50.0,
+                step=10.0,
+                key="fem_snow_load"
+            )
+            
+            wind_kpa_fem = st.number_input(
+                "Shamol bosimi (kPa)",
+                min_value=0.0,
+                max_value=2.0,
+                value=0.38,
+                step=0.05,
+                key="fem_wind_kpa"
+            )
         st.markdown("#### Qurilish materiallari (1 m²/$)")
         col_p1, col_p2 = st.columns(2)
         with col_p1:
@@ -4398,208 +5514,6 @@ def construction_sidebar():
         "bracing_profile": bracing_profile,
         "construction_system": construction_system,
     }
-    # construction_sidebar() funksiyasida (taxminan 2200-qator)
-    with st.sidebar.expander("Konstruksiya turi", expanded=True):
-        construction_system = st.radio(
-            "Metall karkas turi",
-            options=[
-                "LSTK (Yengil Po'lat)",
-                "LMK (Yengil Metall)", 
-                "OG'IR METALL (Heavy Steel)"  # 🔽 YANGI
-            ],
-            index=1,  # LMK standart
-            key="construction_system",
-            help="""
-            **LSTK**: Yupqa sinklangan po'lat (0.7-4mm), vintli birikma, angar/omborlar
-            **LMK**: Qalin metall (8-40mm), payvandlash/boltlar, katta oraliqli binolar
-            **OG'IR METALL**: Qalin H-tavrli profillar (10-60mm), og'ir kranlar va sanoat binolari uchun
-            """
-    )
-    
-
-         
-    with st.sidebar.expander("Derazalar (har devor uchun)", expanded=False):
-        st.caption("Old fasad (darvozalar tomon)")
-        col_w1, col_w2 = st.columns(2)
-        with col_w1:
-            w_front = st.number_input("Old deraza soni", min_value=0, max_value=50, value=3, key="win_front")
-        with col_w2:
-            w_back = st.number_input("Orqa deraza soni", min_value=0, max_value=50, value=3, key="win_back")
-        col_w3, col_w4 = st.columns(2)
-        with col_w3:
-            w_left = st.number_input("Chap deraza soni", min_value=0, max_value=50, value=0, key="win_left")
-        with col_w4:
-            w_right = st.number_input("O'ng deraza soni", min_value=0, max_value=50, value=0, key="win_right")
-        
-        col_ws1, col_ws2 = st.columns(2)
-        with col_ws1:
-            window_width = st.number_input("Deraza eni (m)", min_value=0.5, max_value=25.0, value=2.5, step=0.1, key="cons_win_w")
-        with col_ws2:
-            window_height = st.number_input("Deraza boyi (m)", min_value=0.5, max_value=40.0, value=2.0, step=0.1, key="cons_win_h")
-
-    with st.sidebar.expander("Darvozalar", expanded=False):
-        st.markdown("#### Old devor (Z=W)")
-        col_d1, col_d2 = st.columns(2)
-        with col_d1:
-            door_front_count = st.number_input("Old darvoza soni", min_value=0, max_value=20, value=1, key="door_front")
-        with col_d2:
-            door_front_width = st.number_input("Old darvoza eni (m)", min_value=2.0, max_value=20.0, value=12.0, step=1.0, key="door_front_w")
-            door_front_height = st.number_input("Old darvoza boyi (m)", min_value=2.0, max_value=10.0, value=6.5, step=0.5, key="door_front_h")
-
-        st.markdown("#### Orqa devor (Z=0)")
-        col_d3, col_d4 = st.columns(2)
-        with col_d3:
-            door_back_count = st.number_input("Orqa darvoza soni", min_value=0, max_value=20, value=0, key="door_back")
-        with col_d4:
-            door_back_width = st.number_input("Orqa darvoza eni (m)", min_value=0.0, max_value=20.0, value=12.0, step=1.0, key="door_back_w")
-            door_back_height = st.number_input("Orqa darvoza boyi (m)", min_value=0.0, max_value=10.0, value=6.5, step=0.5, key="door_back_h")
-
-        st.markdown("#### Chap devor (X=0)")
-        col_d5, col_d6 = st.columns(2)
-        with col_d5:
-            door_left_count = st.number_input("Chap darvoza soni", min_value=0, max_value=20, value=0, key="door_left")
-        with col_d6:
-            door_left_width = st.number_input("Chap darvoza eni (m)", min_value=0.0, max_value=20.0, value=5.0, step=1.0, key="door_left_w")
-            door_left_height = st.number_input("Chap darvoza boyi (m)", min_value=0.0, max_value=10.0, value=4.0, step=0.5, key="door_left_h")
-
-        st.markdown("#### O'ng devor (X=L)")
-        col_d7, col_d8 = st.columns(2)
-        with col_d7:
-            door_right_count = st.number_input("O'ng darvoza soni", min_value=0, max_value=20, value=0, key="door_right")
-        with col_d8:
-            door_right_width = st.number_input("O'ng darvoza eni (m)", min_value=0.0, max_value=20.0, value=5.0, step=1.0, key="door_right_w")
-            door_right_height = st.number_input("O'ng darvoza boyi (m)", min_value=0.0, max_value=10.0, value=4.0, step=0.5, key="door_right_h")
-
-    with st.sidebar.expander("NARXLAR (1 tonna/$)", expanded=True):
-        st.markdown("#### Metall narxlari")
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            price_column = st.number_input("Ustunlar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_column")
-            price_truss = st.number_input("Fermalar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_truss")
-            # 🔽 YANGI: Progonlar narxi
-            price_purlins = st.number_input("Progonlar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_purlins")
-        with col_m2:
-            price_beam = st.number_input("Tosinlar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_beam")
-            price_longitudinal = st.number_input("Uzunasiga", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_longitudinal")
-            # 🔽 YANGI: Bog'lamalar narxi
-            price_bracing = st.number_input("Bog'lamalar", min_value=0.0, max_value=5000.0, value=0.0, step=50.0, key="price_metal_bracing")
-        
-        # 🔽 YANGI: Birikma turi va narxi
-        st.markdown("#### Birikma detallari")
-        col_c1, col_c2 = st.columns(2)
-        with col_c1:
-            connection_type = st.selectbox(
-                "Birikma turi", 
-                ["bolted", "welded", "mixed"], 
-                index=2, 
-                key="connection_type"
-            )
-        with col_c2:
-            price_connection = st.number_input(
-                "Birikmalar narxi (1 tonna)", 
-                min_value=0.0, 
-                max_value=5000.0, 
-                value=0.0, 
-                step=50.0, 
-                key="price_metal_connection"
-            )
-        
-        st.markdown("#### Qurilish materiallari (1 m²/$)")
-        col_p1, col_p2 = st.columns(2)
-        with col_p1:
-            wall_price = st.number_input("Devor paneli", min_value=0.0, max_value=500.0, value=35.0, step=5.0, key="price_wall")
-            roof_price = st.number_input("Tom qoplamasi", min_value=0.0, max_value=500.0, value=45.0, step=5.0, key="price_roof")
-        with col_p2:
-            floor_price = st.number_input("Pol qoplamasi", min_value=0.0, max_value=500.0, value=45.0, step=5.0, key="price_floor")
-            window_price = st.number_input("Deraza (1 m²)", min_value=0.0, max_value=200.0, value=45.0, step=5.0, key="price_window")
-            door_price = st.number_input("Darvoza (1 m²)", min_value=0.0, max_value=200.0, value=28.0, step=5.0, key="price_door")
-        
-        st.markdown("#### Beton va materiallar")
-        col_b1, col_b2 = st.columns(2)
-        with col_b1:
-            concrete_price = st.number_input("Beton (1 m³)", min_value=0.0, max_value=500.0, value=0.0, step=5.0, key="price_concrete")
-            cement_price = st.number_input("Sement (1 kg)", min_value=0.0, max_value=1.0, value=0.0, step=0.01, key="price_cement")
-            sand_price = st.number_input("Qum (1 m³)", min_value=0.0, max_value=200.0, value=0.0, step=5.0, key="price_sand")
-        with col_b2:
-            rebar_price = st.number_input("Armatura (1 kg)", min_value=0.0, max_value=2.0, value=0.0, step=0.05, key="price_rebar")
-            gravel_price = st.number_input("Shag'al (1 m³)", min_value=0.0, max_value=200.0, value=0.0, step=5.0, key="price_gravel")
-            shipyak_price = st.number_input("Shipyak (1 m²)", min_value=0.0, max_value=100.0, value=0.0, step=5.0, key="price_shipyak")
-        
-        st.markdown("#### Ishchi kuchi")
-        labor_percent = st.slider("Ishchi kuchi foizi (%)", 0, 100, 32, 1, key="labor_percent")
-    
-    with st.sidebar.expander("Muhandislik va iqlim", expanded=False):
-        heating = st.selectbox("Isitish", ["Yoq", "Gazli", "Elektr", "Infraqizil"], key="cons_heating")
-        ventilation = st.selectbox("Shamollatish", ["Tabiiy", "Majburiy", "Rekuperatsiya"], key="cons_vent")
-        electricity = st.selectbox("Elektr", ["Standart", "Kuchaytirilgan", "Sanoat"], key="cons_elec")
-        plumbing = st.selectbox("Suv taminoti", ["Yoq", "Bor", "Sanoat"], key="cons_plumb")
-        seismic_zone = st.selectbox("Seysmik zona", [7, 8, 9], index=1, key="cons_seismic")
-        wind_region = st.selectbox("Shamol hududi", ["A", "B", "C"], index=1, key="cons_wind")
-        st.divider()
-        st.markdown("#### Tuproq va qor (chidamlilik hisobi uchun)")
-        soil_type = st.selectbox("Tuproq turi", list(SOIL_TYPES.keys()), index=3, key="cons_soil")
-        st.caption(SOIL_TYPES[soil_type]["tavsif"])
-        snow_region = st.selectbox("Qor mintaqasi", list(SNOW_REGIONS.keys()), index=0, key="cons_snow_region")
-    
-    return {
-        "construction_type": construction_type,
-        "construction_name": name,
-        "construction_code": code,
-        "L": L, "W": W, "H": H, "roof_pitch": roof_pitch, "floors": 1,
-        "column_spacing": column_spacing, 
-        "wall_type": wall_type, "wall_thickness": wall_thickness,
-        "floor_type": floor_type, "roof_type": roof_type,
-        "window_count_front": w_front, "window_count_back": w_back,
-        "window_count_left": w_left, "window_count_right": w_right,
-        "window_width": window_width, "window_height": window_height,
-        "door_front_count": door_front_count, 
-        "door_front_width": door_front_width, 
-        "door_front_height": door_front_height,
-        "door_back_count": door_back_count, 
-        "door_back_width": door_back_width, 
-        "door_back_height": door_back_height,
-        "door_left_count": door_left_count, 
-        "door_left_width": door_left_width, 
-        "door_left_height": door_left_height,
-        "door_right_count": door_right_count, 
-        "door_right_width": door_right_width, 
-        "door_right_height": door_right_height,
-        "floor_panel_mode": floor_panel_mode,
-        # Metall narxlari
-        "price_metal_column": price_column,
-        "price_metal_beam": price_beam,
-        "price_metal_truss": price_truss,
-        "price_metal_longitudinal": price_longitudinal,
-        "price_metal_purlins": price_purlins,      # 🔽 YANGI
-        "price_metal_bracing": price_bracing,      # 🔽 YANGI
-        "price_metal_connection": price_connection, # 🔽 YANGI
-        "connection_type": connection_type,        # 🔽 YANGI
-        # Qurilish materiallari
-        "wall_price": wall_price,
-        "roof_price": roof_price,
-        "floor_price": floor_price,
-        "window_price": window_price,
-        "door_price": door_price,
-        "price_concrete": concrete_price,
-        "price_cement": cement_price,
-        "price_sand": sand_price,
-        "price_gravel": gravel_price,
-        "price_rebar": rebar_price,
-        "price_shipyak": shipyak_price,
-        "labor_percent": labor_percent,
-        # Muhandislik
-        "heating": heating, "ventilation": ventilation,
-        "electricity": electricity, "plumbing": plumbing,
-        "seismic_zone": seismic_zone, "wind_region": wind_region,
-        "soil_type": soil_type, "snow_region": snow_region,
-         "purlin_profile": purlin_profile,
-        "wall_purlin_profile": wall_purlin_profile,
-        "bracing_profile": bracing_profile,
-        "construction_system": construction_system,
-    }
-
-
-
 
 
 def construction_main(params):
@@ -4705,12 +5619,13 @@ def construction_main(params):
         st.metric("1 m² narxi", f"${materials['cost_per_m2']:,.1f}")
 
     # ========== TABLAR ==========
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         " O'lchamlar", 
         " Materiallar", 
         " Xarajatlar", 
         " Metall tahlili", 
         " Chidamlilik",
+        " FEM tahlili",
         " Chizmalar"
     ])
 
@@ -4848,8 +5763,7 @@ def construction_main(params):
             </div>
             """, unsafe_allow_html=True)
 
-    # ========== TAB 4: METALL TAHLILI (TO'LIQ YANGILANGAN) ==========
-    # ========== TAB 4: METALL TAHLILI (TO'LIQ QAYTA YOZILGAN) ==========
+    # ========== TAB 4: METALL TAHLILI ==========
     with tab4:
         st.markdown("#### Metall karkas detallari")
         
@@ -5127,8 +6041,6 @@ def construction_main(params):
             **7. Jami:** ustunlar + tosinlar + fermalar + progonlar + bog'lamalar + birikmalar
             """)
     
-    
-    
     with tab5:
         st.markdown("####  Tuproq, yuklamalar va konstruktiv chidamlilik")
         st.caption(
@@ -5199,8 +6111,307 @@ def construction_main(params):
         </div>
         """, unsafe_allow_html=True)
 
-    # ===== 6-TAB: ARXITEKTURA CHIZMALARI =====
+    # ========== TAB 6: FEM TAHLILI (ALOHIDA TAB) ==========
     with tab6:
+        st.markdown("### FEM (Finite Element Method) - Konstruksiya tahlili")
+        st.caption("Har bir elementga tushadigan yuk, kuchlanish va deformatsiyani hisoblaydi")
+        
+        st.markdown("""
+        FEM (Finite Element Method) - konstruksiyani minglab kichik bo'laklarga bo'lib,
+        har bir elementga tushayotgan kuch va deformatsiyani hisoblaydigan usul.
+        """)
+        
+        # FEM parametrlarini olish
+        st.markdown("#### FEM parametrlari")
+        col_fem1, col_fem2, col_fem3 = st.columns(3)
+        with col_fem1:
+            fem_column_profile = st.selectbox(
+                "Ustun profili",
+                ["200x200x6", "250x250x8", "300x300x10", "300x300x12", "350x350x12", "400x400x14"],
+                index=3,
+                key="fem_main_column_profile"
+            )
+        with col_fem2:
+            fem_truss_profile = st.selectbox(
+                "Ferma profili",
+                ["60x60x3", "80x80x3", "100x100x4", "120x120x4", "140x140x5"],
+                index=2,
+                key="fem_main_truss_profile"
+            )
+        with col_fem3:
+            fem_purlin_profile = st.selectbox(
+                "Progon profili",
+                ["80x40x3", "100x50x3", "100x50x4", "120x60x4", "140x60x4", "160x80x4"],
+                index=3,
+                key="fem_main_purlin_profile"
+            )
+        
+        # Yuk parametrlari
+        col_fem4, col_fem5, col_fem6 = st.columns(3)
+        with col_fem4:
+            fem_snow_load = st.number_input(
+                "Qor yuki (kg/m²)",
+                min_value=0.0,
+                max_value=300.0,
+                value=50.0,
+                step=10.0,
+                key="fem_main_snow_load"
+            )
+        with col_fem5:
+            fem_wind_kpa = st.number_input(
+                "Shamol bosimi (kPa)",
+                min_value=0.0,
+                max_value=2.0,
+                value=0.38,
+                step=0.05,
+                key="fem_main_wind_kpa"
+            )
+        with col_fem6:
+            fem_live_load = st.number_input(
+                "Jonli yuk (kg/m²)",
+                min_value=0.0,
+                max_value=500.0,
+                value=100.0,
+                step=10.0,
+                key="fem_main_live_load"
+            )
+        
+        # Optimallashtirish opsiyasi
+        fem_optimize = st.checkbox(
+            "Profillarni avtomatik optimallashtirish (iterativ)",
+            value=False,
+            key="fem_optimize"
+        )
+        
+        # FEM tahlil tugmasi
+        if st.button("FEM tahlilini ishga tushirish", type="primary", key="fem_analyze_main_btn"):
+            with st.spinner("FEM tahlili davom etmoqda..."):
+                # Parametrlarni yangilash
+                fem_params = params.copy()
+                fem_params["snow_kg_m2"] = fem_snow_load
+                fem_params["wind_kPa"] = fem_wind_kpa
+                fem_params["live_load_kg_m2"] = fem_live_load
+                fem_params["fem_column_profile"] = fem_column_profile
+                fem_params["fem_truss_profile"] = fem_truss_profile
+                fem_params["fem_purlin_profile"] = fem_purlin_profile
+                
+                fem = FEMAnalyzer(fem_params, materials)
+                
+                # Optimallashtirish yoki oddiy tahlil
+                if fem_optimize:
+                    fem_results = fem.optimize_profiles(max_iterations=10)
+                    st.success("Profillar optimallashtirildi!")
+                else:
+                    fem_results = fem.run_full_analysis()
+                
+                # Natijalarni session_state da saqlash
+                st.session_state['fem_main_results'] = fem_results
+                st.session_state['fem_main_analyzer'] = fem
+                
+                if fem_results["summary"]["all_safe"]:
+                    st.success("BARCHA KONSTRUKSIYA ELEMENTLARI YETARLI!")
+                else:
+                    st.error(f"{fem_results['summary']['unsafe_count']} ta element yetarli emas!")
+                    st.markdown("### Xavfli elementlar:")
+                    for elem in fem_results["summary"]["unsafe_elements"]:
+                        st.warning(elem)
+        
+        # Natijalar mavjud bo'lsa ko'rsatish
+        if 'fem_main_results' in st.session_state:
+            fem_results = st.session_state['fem_main_results']
+            fem = st.session_state['fem_main_analyzer']
+            
+            # Umumiy statistik
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Jami elementlar", fem_results["summary"]["total_elements"])
+            with col2:
+                st.metric("Xavfsiz", fem_results["summary"]["total_elements"] - fem_results["summary"]["unsafe_count"])
+            with col3:
+                st.metric("Xavfli", fem_results["summary"]["unsafe_count"])
+            with col4:
+                st.metric("Maksimal bandlik", f"{fem_results['summary']['max_utilization']:.0f}%")
+            
+            st.divider()
+            
+            # 1. USTUNLAR
+            st.markdown("#### Ustunlar tahlili")
+            col_data = []
+            for c in fem_results["columns"]:
+                col_data.append({
+                    "N": c["index"],
+                    "X (m)": f"{c['x']:.1f}",
+                    "Z (m)": f"{c['z']:.1f}",
+                    "Yuk (kg)": f"{c['axial_force_kg']:,.0f}",
+                    "Moment (Nm)": f"{c.get('moment_Nm', 0):,.0f}",
+                    "Sigma (MPa)": c.get("sigma_MPa", 0),
+                    "Bukilish %": c.get("buckling_ratio", 0),
+                    "Bandlik %": c["utilization"],
+                    "Profil": c.get("profile", "-"),
+                    "Kombinatsiya": c.get("combo_name", "-"),
+                    "Holat": c["status"],
+                    "Tavsiya": c["recommendation"]
+                })
+            df_cols = pd.DataFrame(col_data)
+            st.dataframe(df_cols, use_container_width=True, hide_index=True)
+            
+            # 2. FERMALAR
+            st.markdown("#### Fermalar tahlili")
+            truss_data = []
+            for t in fem_results["trusses"]:
+                truss_data.append({
+                    "N": t["index"],
+                    "X (m)": f"{t['x']:.1f}",
+                    "Uzunlik (m)": t["length_m"],
+                    "Kuch (kg)": f"{t['max_force_kg']:,.0f}",
+                    "Sigma (MPa)": t["sigma_MPa"],
+                    "Buqilish %": t["buckling_ratio"],
+                    "Bandlik %": t["utilization"],
+                    "Profil": t.get("profile", "-"),
+                    "Kombinatsiya": t.get("combo_name", "-"),
+                    "Holat": t["status"],
+                    "Tavsiya": t["recommendation"]
+                })
+            df_trusses = pd.DataFrame(truss_data)
+            st.dataframe(df_trusses, use_container_width=True, hide_index=True)
+            
+            # 3. PROGONLAR
+            st.markdown("#### Progonlar tahlili")
+            purlin_data = []
+            for p in fem_results["purlins"]:
+                purlin_data.append({
+                    "N": p["index"],
+                    "Uzunlik (m)": p["length_m"],
+                    "Yuk (N/m)": f"{p['load_q_Nm']:.0f}",
+                    "Moment (Nm)": f"{p.get('moment_Nm', 0):,.0f}",
+                    "Egilish (mm)": f"{p['deflection_mm']:.2f}",
+                    "Ruxsat (mm)": p["max_deflection_mm"],
+                    "Bandlik %": p["utilization"],
+                    "Profil": p.get("profile", "-"),
+                    "Kombinatsiya": p.get("combo_name", "-"),
+                    "Holat": p["status"],
+                    "Tavsiya": p["recommendation"]
+                })
+            df_purlins = pd.DataFrame(purlin_data)
+            st.dataframe(df_purlins, use_container_width=True, hide_index=True)
+            
+            # 4. BOG'LAMALAR
+            st.markdown("#### Bog'lamalar tahlili")
+            bracing_data = []
+            for b in fem_results["bracings"]:
+                bracing_data.append({
+                    "N": b["index"],
+                    "Uzunlik (m)": b["length_m"],
+                    "Segment (m)": b.get("segment_m", 0),
+                    "Kuch (kg)": f"{b['force_kg']:,.0f}",
+                    "Sigma (MPa)": b["sigma_MPa"],
+                    "Buqilish Sigma (MPa)": b["buckling_sigma_MPa"],
+                    "Lambda": b.get("lambda", 0),
+                    "Phi": b.get("phi", 0),
+                    "Bandlik %": b["utilization"],
+                    "Profil": b.get("profile", "-"),
+                    "Kombinatsiya": b.get("combo_name", "-"),
+                    "Holat": b["status"],
+                    "Tavsiya": b["recommendation"]
+                })
+            df_bracings = pd.DataFrame(bracing_data)
+            st.dataframe(df_bracings, use_container_width=True, hide_index=True)
+            
+            # 5. POYDEVOR HISOBI
+            if fem_results.get("foundations"):
+                st.divider()
+                st.markdown("#### Poydevor hisobi")
+                foundation_data = []
+                for f in fem_results["foundations"]:
+                    foundation_data.append({
+                        "Ustun #": f.get("column_index", "-"),
+                        "X (m)": f.get("x", 0),
+                        "Z (m)": f.get("z", 0),
+                        "Yuk (kg)": f"{f['axial_force_kg']:,.0f}",
+                        "Tuproq R0 (kPa)": f["soil_R0_kPa"],
+                        "Talab qilingan (m2)": f["required_area_m2"],
+                        "Tanlangan (m)": f["chosen_side_m"],
+                        "Bosim (kPa)": f["pressure_kPa"],
+                        "Bandlik %": f["utilization"],
+                        "Holat": "Yetarli" if f["is_safe"] else "Yetarli emas",
+                        "Tavsiya": f["recommendation"]
+                    })
+                df_foundations = pd.DataFrame(foundation_data)
+                st.dataframe(df_foundations, use_container_width=True, hide_index=True)
+            
+            # 6. PyNiteFEA natijalari
+            if fem_results.get("pynite") and fem_results["pynite"].get("status") == "success":
+                st.divider()
+                st.markdown("### PyNiteFEA - To'liq 3D FEM tahlili")
+                st.success(f"{fem_results['pynite']['message']}")
+                
+                pynite = fem_results["pynite"]
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Jami og'irlik", f"{pynite.get('total_weight_kg', 0):,.0f} kg")
+                with col2:
+                    st.metric("Jami og'irlik", f"{pynite.get('total_weight_kN', 0):.1f} kN")
+                with col3:
+                    st.metric("Ustunlar", f"{len(pynite.get('columns', []))} ta")
+                
+                if pynite.get("columns"):
+                    st.markdown("#### Ustunlardagi aksial kuchlar (PyNite)")
+                    col_data = []
+                    for c in pynite["columns"]:
+                        col_data.append({
+                            "X (m)": c["x"],
+                            "Z (m)": c["z"],
+                            "Kuch (kg)": f"{c['axial_force_kg']:,.0f}",
+                            "Kuch (kN)": c["axial_force_kN"]
+                        })
+                    df_pynite_cols = pd.DataFrame(col_data)
+                    st.dataframe(df_pynite_cols, use_container_width=True, hide_index=True)
+            elif fem_results.get("pynite") and fem_results["pynite"].get("status") == "error":
+                st.warning(f"PyNiteFEA tahlili muvaffaqiyatsiz: {fem_results['pynite']['message']}")
+            
+         
+                # 8. YUK KOMBINATSIYALARI HAQIDA MA'LUMOT
+            with st.expander("Yuk kombinatsiyalari haqida ma'lumot"):
+                st.markdown("""
+                **Quyidagi yuk kombinatsiyalari hisobga olingan:**
+                
+                | N | Kombinatsiya | Tavsif |
+                |---|--------------|--------|
+                | 1 | 1.4D | Faqat o'lik yuk (eng xavfsiz) |
+                | 2 | 1.2D + 1.6L | O'lik + jonli yuk |
+                | 3 | 1.2D + 1.6S | O'lik + qor yuki |
+                | 4 | 1.2D + W + 0.5L | O'lik + shamol + jonli (reduksiya) |
+                | 5 | 1.2D + W + 0.7S | O'lik + shamol + qor (reduksiya) |
+                | 6 | 0.9D + W | O'lik - shamol (eng noqulay) |
+                | 7 | 0.9D + E | O'lik - zilzila |
+                | 8 | 1.2D + E + 0.5L | O'lik + zilzila + jonli |
+                
+                **Qisqartmalar:**
+                - D = O'lik yuk (Dead Load) - konstruksiyaning o'z og'irligi
+                - L = Jonli yuk (Live Load) - foydalanuvchi, uskunalar
+                - S = Qor yuki (Snow Load)
+                - W = Shamol yuki (Wind Load)
+                - E = Zilzila yuki (Earthquake Load)
+                """)
+            
+            # Eksport
+            st.divider()
+            if st.button("FEM natijalarini eksport qilish", key="fem_export_btn"):
+                fem_export = {
+                    "params": params,
+                    "results": fem_results,
+                    "timestamp": datetime.now().isoformat()
+                }
+                st.download_button(
+                    "FEM natijalari (JSON)",
+                    data=json.dumps(fem_export, indent=2),
+                    file_name=f"fem_results_{params['construction_code']}.json",
+                    mime="application/json",
+                    key="fem_download_btn"
+                )
+    
+    # ===== 7-TAB: ARXITEKTURA CHIZMALARI =====
+    with tab7:
         st.markdown("### 🏗️ Arxitektura Chizmalari (AutoCAD uslubida)")
         st.caption("Quyidagi chizmalar professional loyiha hujjatlari uchun asos bo'lib xizmat qiladi")
         
@@ -5297,4 +6508,3 @@ def construction_main(params):
                 st.warning("⚠️ Excel yaratish uchun 'openpyxl' kutubxonasi kerak. O'rnatish: pip install openpyxl")
         except Exception as e:
             st.warning(f"Excel yaratishda xatolik: {e}")
-    
