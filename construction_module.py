@@ -939,17 +939,20 @@ class FoundationDesign:
         self.soil_type = soil_type
         self.seismic_zone = seismic_zone
         
+        # Eslatma: kalitlar SOIL_TYPES (yuqorida, sidebar shu ro'yxatdan tanlov
+        # beradi) bilan bir xil bo'lishi SHART, aks holda .get() pastda
+        # noto'g'ri tuproqqa jimgina almashtirib yuboradi.
         self.soil_data = {
             "Qoyali tog' jinsi": {"R0": 600, "bearing": 600, "friction": 35},
-            "Yirik shag'al": {"R0": 500, "bearing": 500, "friction": 30},
+            "Yirik shag'al / qumli-shag'al": {"R0": 500, "bearing": 500, "friction": 30},
             "Zich qum": {"R0": 400, "bearing": 400, "friction": 28},
-            "O'rta qum": {"R0": 300, "bearing": 300, "friction": 25},
+            "O'rta zichlikdagi qum": {"R0": 300, "bearing": 300, "friction": 25},
             "Qattiq gil": {"R0": 300, "bearing": 300, "friction": 20},
             "Yarim qattiq gil": {"R0": 250, "bearing": 250, "friction": 18},
-            "Bo'sh qum": {"R0": 150, "bearing": 150, "friction": 15},
-            "Yumshoq gil": {"R0": 120, "bearing": 120, "friction": 12},
-            "Lyoss": {"R0": 180, "bearing": 180, "friction": 20},
-            "Torfli": {"R0": 50, "bearing": 50, "friction": 5},
+            "Bo'sh (govak) qum": {"R0": 150, "bearing": 150, "friction": 15},
+            "Yumshoq plastik gil": {"R0": 120, "bearing": 120, "friction": 12},
+            "Lyoss / lyossimon (cho'kuvchan)": {"R0": 180, "bearing": 180, "friction": 20},
+            "Torfli / botqoq tuproq": {"R0": 50, "bearing": 50, "friction": 5},
         }
         
         self.standard_sizes = [0.8, 1.0, 1.2, 1.5, 1.8, 2.0, 2.4, 2.8, 3.2, 3.6, 4.0]
@@ -959,7 +962,7 @@ class FoundationDesign:
         N = axial_force_kg * 9.81  # N
         M = moment_Nm  # N*m
         
-        soil = self.soil_data.get(self.soil_type, self.soil_data["O'rta qum"])
+        soil = self.soil_data.get(self.soil_type, self.soil_data["O'rta zichlikdagi qum"])
         R0 = soil["R0"] * 1000  # Pa
         
         A_required = N / R0  # m²
@@ -971,9 +974,12 @@ class FoundationDesign:
         else:
             A_eff = A_required
         
-        # Standart o'lcham tanlash
+        # Standart o'lcham tanlash. Agar kerakli o'lcham eng katta standart
+        # o'lchamdan ham oshib ketsa (juda og'ir yuk / zaif tuproq), eng
+        # kichigiga emas - eng kattasiga tushiladi, aks holda "yetarli emas"
+        # holatda mutlaqo yetarsiz kichik o'lcham tavsiya qilinib qolardi.
         side_required = math.sqrt(A_eff)
-        chosen_side = self.standard_sizes[0]
+        chosen_side = self.standard_sizes[-1]
         for s in self.standard_sizes:
             if s >= side_required:
                 chosen_side = s
@@ -1036,7 +1042,7 @@ class FEMAnalyzer:
         self.load_combos = LoadCombinations()
         
         # Poydevor dizayni
-        self.soil_type = params.get("soil_type", "O'rta qum")
+        self.soil_type = params.get("soil_type", "O'rta zichlikdagi qum")
         self.foundation_designer = FoundationDesign(self.soil_type, self.seismic_zone)
 
         # Progon oralig'i (avtomatik optimallashtiriladi)
@@ -1122,7 +1128,7 @@ class FEMAnalyzer:
         return self.profiles[profile_type][-1] if self.profiles.get(profile_type) else None
 
     def _find_optimal_column_profile(self, N, M, H):
-        for profile in reversed(self.profiles["column"]):
+        for profile in self.profiles["column"]:
             h = profile["h"]
             A = profile["A"]
             Ix = profile["Ix"]
@@ -1139,7 +1145,7 @@ class FEMAnalyzer:
         return self.profiles["column"][-1]
 
     def _find_optimal_truss_profile(self, F, L):
-        for profile in reversed(self.profiles["truss"]):
+        for profile in self.profiles["truss"]:
             A = profile["A"]
             I = profile["I"]
 
@@ -1155,7 +1161,7 @@ class FEMAnalyzer:
     def _find_optimal_purlin_profile(self, M, L):
         max_deflection = L / 200
         
-        for profile in reversed(self.profiles["purlin"]):
+        for profile in self.profiles["purlin"]:
             Ix = profile["Ix"]
             h = profile["h"]
             Wx = Ix / (h / 2) if h > 0 else Ix * 2
@@ -1171,7 +1177,7 @@ class FEMAnalyzer:
         return self.profiles["purlin"][-1]
 
     def _find_optimal_bracing_profile(self, F, L):
-        for profile in reversed(self.profiles["bracing"]):
+        for profile in self.profiles["bracing"]:
             A = profile["A"]
             r = profile["r"]
             
@@ -5203,61 +5209,61 @@ def construction_sidebar():
             help="Ustunlar orasidagi masofa. Kichik qiymat - ko'proq ustun, katta qiymat - kamroq ustun"
         )
     
-        with st.sidebar.expander("Materiallar", expanded=True):
-            wall_type = st.selectbox("Devor turi", list(wall_materials.keys()), key="cons_wall")
-            wall_thickness = st.selectbox("Devor qalinligi", wall_materials[wall_type]["qalinlik"], key="cons_thick")
-            
-            floor_type = st.selectbox("Pol turi", list(floor_materials.keys()), key="cons_floor")
-            
-            # ✅ YANGI: Pol qalinligi - foydalanuvchi kiritadi
-            floor_thickness_cm = st.number_input(
-                "Pol betoni qalinligi (sm)", 
-                min_value=0.0, 
-                max_value=100.0, 
-                value=10.0, 
-                step=0.1,
-                key="cons_floor_thickness",
-                help="Sanoat betoni uchun standart 15 sm. Yengil omborlar 10 sm, og'ir sanoat 20-25 sm."
-            )
-            
-            roof_type = st.selectbox("Tom turi", list(roof_materials.keys()), key="cons_roof")
-            floor_panel_mode = st.checkbox(
-                "Pol panel sifatida hisobla", 
-                value=False,
-                key="cons_floor_panel"
-            )
-            
-            st.divider()
-            st.markdown("#### Progonlar profillari")
-            
-            # Tom progonlari
-            purlin_profile = st.selectbox(
-                "Tom progonlari (GOST 8645-68)",
-                options=get_profile_list("purlin"),
-                index=3,
-                key="purlin_profile_select"
-            )
-            
-            # Devor progonlari
-            wall_purlin_profile = st.selectbox(
-                "Devor progonlari (GOST 8645-68)",
-                options=get_profile_list("purlin"),
-                index=2,
-                key="wall_purlin_profile_select"
-            )
-            
-            # Bog'lamalar profili
-            bracing_profile = st.selectbox(
-                "Bog'lamalar (Shveller GOST 8240-97)",
-                options=get_profile_list("bracing"),
-                index=2,
-                key="bracing_profile_select"
-            )
-            
-            # Tanlangan profillarning og'irliklarini ko'rsatish
-            st.caption(f"Tom progonlari: {purlin_profile} ({get_profile_weight('purlin', purlin_profile)} kg/m)")
-            st.caption(f"Devor progonlari: {wall_purlin_profile} ({get_profile_weight('purlin', wall_purlin_profile)} kg/m)")
-            st.caption(f"Bog'lamalar: {bracing_profile} ({get_profile_weight('bracing', bracing_profile)} kg/m)")
+    with st.sidebar.expander("Materiallar", expanded=True):
+        wall_type = st.selectbox("Devor turi", list(wall_materials.keys()), key="cons_wall")
+        wall_thickness = st.selectbox("Devor qalinligi", wall_materials[wall_type]["qalinlik"], key="cons_thick")
+        
+        floor_type = st.selectbox("Pol turi", list(floor_materials.keys()), key="cons_floor")
+        
+        # ✅ YANGI: Pol qalinligi - foydalanuvchi kiritadi
+        floor_thickness_cm = st.number_input(
+            "Pol betoni qalinligi (sm)", 
+            min_value=0.0, 
+            max_value=100.0, 
+            value=10.0, 
+            step=0.1,
+            key="cons_floor_thickness",
+            help="Sanoat betoni uchun standart 15 sm. Yengil omborlar 10 sm, og'ir sanoat 20-25 sm."
+        )
+        
+        roof_type = st.selectbox("Tom turi", list(roof_materials.keys()), key="cons_roof")
+        floor_panel_mode = st.checkbox(
+            "Pol panel sifatida hisobla", 
+            value=False,
+            key="cons_floor_panel"
+        )
+        
+        st.divider()
+        st.markdown("#### Progonlar profillari")
+        
+        # Tom progonlari
+        purlin_profile = st.selectbox(
+            "Tom progonlari (GOST 8645-68)",
+            options=get_profile_list("purlin"),
+            index=3,
+            key="purlin_profile_select"
+        )
+        
+        # Devor progonlari
+        wall_purlin_profile = st.selectbox(
+            "Devor progonlari (GOST 8645-68)",
+            options=get_profile_list("purlin"),
+            index=2,
+            key="wall_purlin_profile_select"
+        )
+        
+        # Bog'lamalar profili
+        bracing_profile = st.selectbox(
+            "Bog'lamalar (Shveller GOST 8240-97)",
+            options=get_profile_list("bracing"),
+            index=2,
+            key="bracing_profile_select"
+        )
+        
+        # Tanlangan profillarning og'irliklarini ko'rsatish
+        st.caption(f"Tom progonlari: {purlin_profile} ({get_profile_weight('purlin', purlin_profile)} kg/m)")
+        st.caption(f"Devor progonlari: {wall_purlin_profile} ({get_profile_weight('purlin', wall_purlin_profile)} kg/m)")
+        st.caption(f"Bog'lamalar: {bracing_profile} ({get_profile_weight('bracing', bracing_profile)} kg/m)")
 
     with st.sidebar.expander("Konstruksiya turi", expanded=True):
         construction_system = st.radio(
@@ -5358,66 +5364,6 @@ def construction_sidebar():
                 step=50.0, 
                 key="price_metal_connection"
             )
-        # Sidebarga FEM sozlamalari qo'shish
-        with st.sidebar.expander("🔬 FEM sozlamalari", expanded=False):
-            st.caption("FEM tahlili uchun parametrlar")
-            
-            # Profil tanlash (foydalanuvchi so'ragandek)
-            st.markdown("#### Profil tanlash")
-            
-            # Ustun profili
-            column_profile = st.selectbox(
-                "Ustun profili",
-                ["200x200x6", "200x200x8", "250x250x8", "250x250x10", "300x300x10", "300x300x12"],
-                index=0,
-                key="fem_column_profile"
-            )
-            
-            # Ferma profili
-            truss_profile = st.selectbox(
-                "Ferma profili",
-                ["60x60x3", "60x60x4", "80x80x3", "80x80x4", "100x100x3", "100x100x4"],
-                index=0,
-                key="fem_truss_profile"
-            )
-            
-            # Progon profili
-            purlin_profile_fem = st.selectbox(
-                "Progon profili",
-                ["80x40x3", "80x40x4", "100x50x3", "100x50x4", "120x60x3", "120x60x4"],
-                index=0,
-                key="fem_purlin_profile"
-            )
-            
-            # Bog'lama profili
-            bracing_profile_fem = st.selectbox(
-                "Bog'lama profili",
-                ["Shveller 10P", "Shveller 12P", "Shveller 14P", "Shveller 16P", "Shveller 18P"],
-                index=2,
-                key="fem_bracing_profile"
-            )
-            
-            st.divider()
-            
-            # Yuk parametrlari
-            st.markdown("#### Yuk parametrlari")
-            snow_load_fem = st.number_input(
-                "Qor yuki (kg/m²)",
-                min_value=0.0,
-                max_value=300.0,
-                value=50.0,
-                step=10.0,
-                key="fem_snow_load"
-            )
-            
-            wind_kpa_fem = st.number_input(
-                "Shamol bosimi (kPa)",
-                min_value=0.0,
-                max_value=2.0,
-                value=0.38,
-                step=0.05,
-                key="fem_wind_kpa"
-            )
         st.markdown("#### Qurilish materiallari (1 m²/$)")
         col_p1, col_p2 = st.columns(2)
         with col_p1:
@@ -5442,6 +5388,67 @@ def construction_sidebar():
         st.markdown("#### Ishchi kuchi")
         labor_percent = st.slider("Ishchi kuchi foizi (%)", 0, 100, 32, 1, key="labor_percent")
     
+    # Sidebarga FEM sozlamalari qo'shish
+    with st.sidebar.expander("🔬 FEM sozlamalari", expanded=False):
+        st.caption("FEM tahlili uchun parametrlar")
+        
+        # Profil tanlash (foydalanuvchi so'ragandek)
+        st.markdown("#### Profil tanlash")
+        
+        # Ustun profili
+        column_profile = st.selectbox(
+            "Ustun profili",
+            ["200x200x6", "200x200x8", "250x250x8", "250x250x10", "300x300x10", "300x300x12"],
+            index=0,
+            key="fem_column_profile"
+        )
+        
+        # Ferma profili
+        truss_profile = st.selectbox(
+            "Ferma profili",
+            ["60x60x3", "60x60x4", "80x80x3", "80x80x4", "100x100x3", "100x100x4"],
+            index=0,
+            key="fem_truss_profile"
+        )
+        
+        # Progon profili
+        purlin_profile_fem = st.selectbox(
+            "Progon profili",
+            ["80x40x3", "80x40x4", "100x50x3", "100x50x4", "120x60x3", "120x60x4"],
+            index=0,
+            key="fem_purlin_profile"
+        )
+        
+        # Bog'lama profili
+        bracing_profile_fem = st.selectbox(
+            "Bog'lama profili",
+            ["Shveller 10P", "Shveller 12P", "Shveller 14P", "Shveller 16P", "Shveller 18P"],
+            index=2,
+            key="fem_bracing_profile"
+        )
+        
+        st.divider()
+        
+        # Yuk parametrlari
+        st.markdown("#### Yuk parametrlari")
+        snow_load_fem = st.number_input(
+            "Qor yuki (kg/m²)",
+            min_value=0.0,
+            max_value=300.0,
+            value=50.0,
+            step=10.0,
+            key="fem_snow_load"
+        )
+        
+        wind_kpa_fem = st.number_input(
+            "Shamol bosimi (kPa)",
+            min_value=0.0,
+            max_value=2.0,
+            value=0.38,
+            step=0.05,
+            key="fem_wind_kpa"
+        )
+
     with st.sidebar.expander("Muhandislik va iqlim", expanded=False):
         heating = st.selectbox("Isitish", ["Yoq", "Gazli", "Elektr", "Infraqizil"], key="cons_heating")
         ventilation = st.selectbox("Shamollatish", ["Tabiiy", "Majburiy", "Rekuperatsiya"], key="cons_vent")

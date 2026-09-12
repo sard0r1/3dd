@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Foydalanuvchi shaxsiy/sessiya ma'lumotlari
+form_data.json
+
+# Muhit o'zgaruvchilari (API kalitlar: GROQ_API_KEY, TELEGRAM_BOT_TOKEN va h.k.)
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Manba katalog fayllari - ma'lumotlari kodga (DOOR_CATALOG, AGREGAT_CATALOG)
+# allaqachon kiritilgan, dastur ishga tushganda bu fayllarni o'qimaydi.
+# Repo/deploy hajmini kichraytirish uchun kuzatilmaydi.
+Door Katalog 2026.pdf
+agregat narxlari 2.pdf
+ECO PROM.png

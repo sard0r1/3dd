@@ -82,9 +82,9 @@ DEFAULT_FORM_DATA = {
     "pol_turi":"PUR (Standart)","pol_qalin":"100mm",
     "pol_material":"PUR panel",  # Yangi: "PUR panel" yoki "Beton"
     "beton_qalinligi_mm":100,     # Beton qalinligi mm da
-    "eshik":"Muzlatkich eshigi","eshik_joyi":"Old",
+    "eshik":"F1","eshik_joyi":"Old",
     "eshik_pozitsiya":"O'rta","eshik_ochilish":"Ichkariga",
-    "agregat":"Split-sistema (Nizkotemp)","agregat_joyi":"Old",
+    "agregat":"eco_n5","agregat_joyi":"Old","evaporator_joyi":"Orqa",
     "project_name":"","room_code":"EP-001",
     "mahsulot_turi":"Go'sht","saqlash_temp":"-18C",
     "ochilish_soni":"Kam","hudud":"Mo'tadil","namlik_talabi":"Standart",
@@ -108,11 +108,100 @@ pw_opts          = [0.96,1.00,1.16]
 pol_turi_opts    = ["PUR (Kuchaytirilgan)","PUR (Standart)"]
 pol_qalin_opts   = ["50mm","80mm","100mm","150mm"]
 pol_material_opts = ["PUR panel", "Beton"]  # Yangi tanlov
-eshik_opts = ["Yo'q","Custom","Bir tabaqali (90x190)","Surilma (120x200)","Muzlatkich eshigi"]
+# ========== ESHIK KATALOGI (Door Katalog 2026.pdf asosida, F1-F9) ==========
+# window: "round" | "oval" | "none"   mechanism: "hinged" | "swing" | "sliding"
+# leaves: 1 yoki 2 tabaqali   handle: "lever" | "bar" | "chain" | "bumper"
+DOOR_CATALOG = {
+    "F1": {"name": "F1 - Yagona tabaqali, dumaloq oyna", "w": 1000, "h": 2000, "thickness": 80,
+           "window": "round", "leaves": 1, "mechanism": "hinged", "handle": "lever", "hinges": 3,
+           "color": 0xf2f2ec, "desc": "Plastik rama, plastik dastak/petli, Xitoy mexanizmi"},
+    "F2": {"name": "F2 - Yagona tabaqali, oynasiz", "w": 1000, "h": 2000, "thickness": 80,
+           "window": "none", "leaves": 1, "mechanism": "hinged", "handle": "lever", "hinges": 3,
+           "color": 0xe9e9e2, "desc": "Kuchaytirilgan alyuminiy rama, 3 ta petli"},
+    "F3": {"name": "F3 - Metall dastak-qulf mexanizmi", "w": 1000, "h": 2000, "thickness": 100,
+           "window": "none", "leaves": 1, "mechanism": "hinged", "handle": "bar", "hinges": 2,
+           "color": 0xeeeee6, "desc": "Plastik rama, metall dastak/petli, maxsus qulf"},
+    "F4": {"name": "F4 - Kuchaytirilgan, dumaloq oyna", "w": 1000, "h": 2000, "thickness": 100,
+           "window": "round", "leaves": 1, "mechanism": "hinged", "handle": "lever", "hinges": 2,
+           "color": 0xd9cfa8, "desc": "Massiv aksessuarlar, kuchaytirilgan issiqlik izolyatsiyasi"},
+    "F5": {"name": "F5 - Metall petli/dastak", "w": 1000, "h": 2000, "thickness": 45,
+           "window": "none", "leaves": 1, "mechanism": "hinged", "handle": "bar", "hinges": 2,
+           "color": 0xc9cec9, "desc": "Plastik rama, metall petli/dastak"},
+    "F6": {"name": "F6 - Ikki tabaqali mayatnik, oval oyna", "w": 1300, "h": 2000, "thickness": 40,
+           "window": "oval", "leaves": 2, "mechanism": "swing", "handle": "bumper", "hinges": 2,
+           "color": 0xc7d5d8, "desc": "Ikki tomonga ochiladi, alyuminiy rama, turk plastik petli"},
+    "F7": {"name": "F7 - Yagona mayatnik, oval oyna", "w": 1150, "h": 2000, "thickness": 40,
+           "window": "oval", "leaves": 1, "mechanism": "swing", "handle": "bumper", "hinges": 2,
+           "color": 0xd6ddd4, "desc": "Ikki tomonga ochiladi, kompakt"},
+    "F8": {"name": "F8 - Surilma (rels), yagona panel", "w": 2500, "h": 2200, "thickness": 100,
+           "window": "none", "leaves": 1, "mechanism": "sliding", "handle": "lever", "hinges": 0,
+           "color": 0xd7e0e3, "desc": "Pastki ramasiz - tележка/transport uchun"},
+    "F9": {"name": "F9 - Surilma (rels), ikki panel", "w": 2500, "h": 2200, "thickness": 100,
+           "window": "none", "leaves": 2, "mechanism": "sliding", "handle": "chain", "hinges": 0,
+           "color": 0xbdd2df, "desc": "Zanjirli qulf, dastaksiz"},
+}
+eshik_opts = ["Yo'q"] + list(DOOR_CATALOG.keys())
+
+def door_catalog_label(key):
+    return DOOR_CATALOG[key]["name"] if key in DOOR_CATALOG else key
+
+# ========== AGREGAT (KOMPRESSOR) KATALOGI - "agregat narxlari 2.pdf" asosida ==========
+# regime: "Nizkotemp" (-, muzlatish) | "Srednetemp" (+, sovutish)
+# narxlar: kompressor + isparitel (evaporator) + kondensator + komplektuvchi = jami (yuqori narx)
+AGREGAT_CATALOG = {
+    "eco_n3":  {"name": "Ecoprom -3 HP blok (Nizkotemp)", "brand": "Ecoprom", "hp": 3, "regime": "Nizkotemp",
+                "comp_price": 550, "evap_model": "DJ-15", "evap_price": 400,
+                "cond_model": "FN-28", "cond_price": 300, "accessories_price": 400, "total_price": 2000},
+    "eco_n5":  {"name": "Ecoprom -5 HP blok (Nizkotemp)", "brand": "Ecoprom", "hp": 5, "regime": "Nizkotemp",
+                "comp_price": 650, "evap_model": "DJ-30", "evap_price": 500,
+                "cond_model": "FN-49", "cond_price": 400, "accessories_price": 600, "total_price": 2500},
+    "eco_p7":  {"name": "Ecoprom +7 HP blok (Srednetemp)", "brand": "Ecoprom", "hp": 7, "regime": "Srednetemp",
+                "comp_price": 700, "evap_model": "DD-60", "evap_price": 750,
+                "cond_model": "FN-70", "cond_price": 500, "accessories_price": 650, "total_price": 3000},
+    "eco_n10": {"name": "Ecoprom -10 HP blok (Nizkotemp)", "brand": "Ecoprom", "hp": 10, "regime": "Nizkotemp",
+                "comp_price": 900, "evap_model": "DJ-70", "evap_price": 1100,
+                "cond_model": "FN-100", "cond_price": 800, "accessories_price": 700, "total_price": 4000},
+    "eco_p15": {"name": "Ecoprom +15 HP blok (Srednetemp)", "brand": "Ecoprom", "hp": 15, "regime": "Srednetemp",
+                "comp_price": 1000, "evap_model": "DD-140", "evap_price": 1400,
+                "cond_model": "FN-150", "cond_price": 1200, "accessories_price": 750, "total_price": 4500},
+    "eco_n15": {"name": "Ecoprom -15 HP blok (Nizkotemp)", "brand": "Ecoprom", "hp": 15, "regime": "Nizkotemp",
+                "comp_price": 1200, "evap_model": "DJ-100", "evap_price": 1400,
+                "cond_model": "FN-180", "cond_price": 1350, "accessories_price": 850, "total_price": 5000},
+    "eco_p20": {"name": "Ecoprom +20 HP blok (Srednetemp)", "brand": "Ecoprom", "hp": 20, "regime": "Srednetemp",
+                "comp_price": 1100, "evap_model": "DD-160", "evap_price": 1550,
+                "cond_model": "FN-180", "cond_price": 1350, "accessories_price": 900, "total_price": 5500},
+    "eco_n20": {"name": "Ecoprom -20 HP blok (Nizkotemp)", "brand": "Ecoprom", "hp": 20, "regime": "Nizkotemp",
+                "comp_price": 1300, "evap_model": "DJ-115", "evap_price": 1600,
+                "cond_model": "FN-210", "cond_price": 1600, "accessories_price": 900, "total_price": 6000},
+    "eco_n30": {"name": "Ecoprom -30 HP blok (Nizkotemp)", "brand": "Ecoprom", "hp": 30, "regime": "Nizkotemp",
+                "comp_price": 1600, "evap_model": "DJ-170", "evap_price": 2300,
+                "cond_model": "FN-240", "cond_price": 1800, "accessories_price": 1300, "total_price": 7500},
+    "frascold_s15": {"name": "Frascold S15-56Y agregat", "brand": "Frascold", "hp": 15, "regime": "Nizkotemp",
+                "comp_price": 2000, "evap_model": "DD-140 / DJ-100", "evap_price": 1400,
+                "cond_model": "FN-180", "cond_price": 1350, "accessories_price": 850, "total_price": 6000},
+    "frascold_s20": {"name": "Frascold S20-56Y agregat", "brand": "Frascold", "hp": 20, "regime": "Nizkotemp",
+                "comp_price": 2400, "evap_model": "DJ-115", "evap_price": 1600,
+                "cond_model": "FN-210", "cond_price": 1600, "accessories_price": 900, "total_price": 7000},
+    "frascold_z30": {"name": "Frascold Z30-126Y agregat", "brand": "Frascold", "hp": 30, "regime": "Nizkotemp",
+                "comp_price": 4000, "evap_model": "DJ-170", "evap_price": 2300,
+                "cond_model": "FN-240", "cond_price": 1800, "accessories_price": 1300, "total_price": 10000},
+    "closed_p15": {"name": "Yopiq (germetik) +15 HP", "brand": "Universal", "hp": 15, "regime": "Srednetemp",
+                "comp_price": 1000, "evap_model": "DD-140", "evap_price": 1400,
+                "cond_model": "", "cond_price": 1500, "accessories_price": 800, "total_price": 5000},
+    "closed_n15": {"name": "Yopiq (germetik) -15 HP", "brand": "Universal", "hp": 15, "regime": "Nizkotemp",
+                "comp_price": 1200, "evap_model": "DJ-100", "evap_price": 1400,
+                "cond_model": "", "cond_price": 1500, "accessories_price": 900, "total_price": 5500},
+    "closed_p20": {"name": "Yopiq (germetik) +20 HP", "brand": "Universal", "hp": 20, "regime": "Srednetemp",
+                "comp_price": 1100, "evap_model": "DD-160", "evap_price": 1550,
+                "cond_model": "", "cond_price": 1500, "accessories_price": 900, "total_price": 5500},
+}
+agregat_opts = ["Yo'q"] + list(AGREGAT_CATALOG.keys())
+
+def agregat_catalog_label(key):
+    return AGREGAT_CATALOG[key]["name"] if key in AGREGAT_CATALOG else key
 
 eshik_joyi_opts  = ["Old","Orqa","O'ng","Chap"]
 eshik_och_opts   = ["Ichkariga","Tashqariga"]
-agregat_opts     = ["Yo'q","Mono-blok (Srednetemp)","Split-sistema (Nizkotemp)","Zanotti (Italiya)"]
 ag_joyi_opts     = ["Old","Orqa","Chap","O'ng","O'rta (Tom)"]
 mahsulot_opts    = ["Go'sht","Tovuq","Baliq","Muzqaymoq","Sut mahsulotlari","Meva-sabzavot","Gullar","Dorilar","Ichimliklar","Aralash mahsulot"]
 ochilish_opts    = ["Kam","O'rtacha","Ko'p"]
@@ -135,6 +224,7 @@ MULTI_DEFAULTS = {
     "corridor_w": 2.5,
     "corridor_pos": "Markaz",
     "wall_mm_multi": 100,
+    "eshik_turi_multi": "F1",
     "door_w_multi": 0.96,
     "door_h_multi": 2.1,
     "proj_name_multi": "200m2 Sovutgich Ombori",
@@ -147,18 +237,30 @@ MULTI_DEFAULTS = {
 }
 
 st.markdown("""<style>
-.main{background:#f0f2f5}
+:root{
+    --eco-green-dark:#2F4A28;
+    --eco-green:#4E8A3A;
+    --eco-green-light:#5E944D;
+    --eco-green-pale:#EAF5E6;
+    --eco-green-border:#CFE6C6;
+    --eco-gray:#535353;
+}
+.main{background:var(--eco-green-pale)}
 .block-container{padding-top:.8rem;padding-bottom:2rem;max-width:1500px}
-h1,h2,h3,h4{color:#111}
-.stButton>button{width:100%;border-radius:8px;height:2.8em;background:#111;color:white;font-weight:700;border:none;transition:all .25s ease;letter-spacing:.02em}
-.stButton>button:hover{background:#333;transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.18)}
-.stDownloadButton>button{width:100%;border-radius:8px;height:2.8em;background:#1f2937;color:white;font-weight:700;border:none}
-.card{background:white;border-radius:12px;border:1px solid #e2e6ea;box-shadow:0 1px 3px rgba(0,0,0,.05);padding:18px;margin-bottom:10px}
-.metric-box{background:white;border-radius:12px;border:1px solid #e2e6ea;padding:16px;text-align:center}
-.metric-title{color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
-.metric-value{color:#111;font-size:22px;font-weight:800;margin-top:6px}
-.ai-box{background:white;border-radius:12px;border:1px solid #e2e6ea;border-left:5px solid #111;padding:18px}
-.badge{display:inline-block;padding:3px 10px;border-radius:999px;background:#f3f4f6;border:1px solid #e5e7eb;font-size:12px;margin:2px 4px 4px 0}
+h1,h2,h3,h4{color:var(--eco-green-dark)}
+.stButton>button{width:100%;border-radius:8px;height:2.8em;background:var(--eco-green);color:white;font-weight:700;border:none;transition:all .25s ease;letter-spacing:.02em}
+.stButton>button:hover{background:var(--eco-green-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(46,74,40,.28)}
+.stDownloadButton>button{width:100%;border-radius:8px;height:2.8em;background:var(--eco-green-dark);color:white;font-weight:700;border:none}
+.card{background:white;color:#1f2937;border-radius:12px;border:1px solid var(--eco-green-border);box-shadow:0 1px 3px rgba(46,74,40,.06);padding:18px;margin-bottom:10px}
+.card b{color:var(--eco-green-dark)}
+.metric-box{background:white;color:#1f2937;border-radius:12px;border:1px solid var(--eco-green-border);padding:16px;text-align:center}
+.metric-title{color:#5f7a58;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.metric-value{color:var(--eco-green-dark);font-size:22px;font-weight:800;margin-top:6px}
+.ai-box{background:white;color:#1f2937;border-radius:12px;border:1px solid var(--eco-green-border);border-left:5px solid var(--eco-green);padding:18px}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;background:var(--eco-green-pale);color:var(--eco-green-dark);border:1px solid var(--eco-green-border);font-size:12px;margin:2px 4px 4px 0}
+.eco-brand{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.eco-brand img{height:38px;width:auto}
+.eco-brand span{font-weight:800;font-size:15px;color:var(--eco-green-dark);letter-spacing:.02em}
 </style>""", unsafe_allow_html=True)
 
 # helpers
@@ -167,7 +269,8 @@ def load_form_data():
         try:
             with open(DATA_FILE,"r",encoding="utf-8") as f: data=json.load(f)
             merged=DEFAULT_FORM_DATA.copy(); merged.update(data); return merged
-        except: pass
+        except Exception as e:
+            st.warning(f"Saqlangan sozlamalar o'qilmadi, standart qiymatlar ishlatiladi: {e}")
     return DEFAULT_FORM_DATA.copy()
 
 def save_form_data():
@@ -205,55 +308,15 @@ def m_to_mm(m): return int(round(m*1000))
 def clamp(v,lo,hi): return max(lo,min(v,hi))
 
 def door_dim(eshik):
-    if eshik=="Bir tabaqali (90x190)": return 900,1900
-    if eshik=="Surilma (120x200)": return 1200,2000
-    if eshik=="Muzlatkich eshigi": return 960,2000
-    return 0,0
-
-# ========== SHU YERDAN KEYIN QO'SHING ==========
-def door_dim_custom(eshik, custom_w=None, custom_h=None):
-    """Eshik o'lchamlarini qaytaradi - custom qo'llab-quvvatlaydi"""
-    if eshik == "Custom":
-        return custom_w or 900, custom_h or 1900
-    if eshik == "Bir tabaqali (90x190)": return 900, 1900
-    if eshik == "Surilma (120x200)": return 1200, 2000
-    if eshik == "Muzlatkich eshigi": return 960, 2000
+    """F1-F9 eshik katalogidan (mm, mm) o'lcham qaytaradi."""
+    if eshik in DOOR_CATALOG:
+        d = DOOR_CATALOG[eshik]
+        return d["w"], d["h"]
     return 0, 0
 
-def calculate_split_chambers(L, W, H, bolish_turi, kameralar_soni):
-    """Kamerani 2-6 ta kameralarga bo'lish"""
-    if kameralar_soni < 2:
-        return [{"L": L, "W": W, "H": H, "id": 1}]
-    
-    chambers = []
-    if bolish_turi == "Uzunlik bo'yicha":
-        each_L = L / kameralar_soni
-        for i in range(kameralar_soni):
-            chambers.append({
-                "id": i + 1,
-                "L": each_L,
-                "W": W,
-                "H": H,
-                "x": i * each_L,
-                "y": 0,
-                "w": each_L,
-                "h": W
-            })
-    else:  # "Eni bo'yicha"
-        each_W = W / kameralar_soni
-        for i in range(kameralar_soni):
-            chambers.append({
-                "id": i + 1,
-                "L": L,
-                "W": each_W,
-                "H": H,
-                "x": 0,
-                "y": i * each_W,
-                "w": L,
-                "h": each_W
-            })
-    
-    return chambers
+def door_dim_custom(eshik, custom_w=None, custom_h=None):
+    """Moslik uchun saqlangan nom - endi custom eshik yo'q, shunchaki door_dim()ga o'tkazadi."""
+    return door_dim(eshik)
 
 def panel_count(length_m,pw=1.16):
     full=int(length_m//pw); rem=round(length_m-full*pw,3)
@@ -368,23 +431,29 @@ def calculate_multi_panels(L, W, heights_list, n_chambers, wall_mm,
         Wc = ch["W"]
         Hc = ch["H"]
         
-        # Devor panellari: 4 devor
+        # Devor panellari: 4 devor (tashqi o'lcham bo'yicha - devor perimetr atrofida turadi)
         wall_panels = panel_count(Lc, panel_width_m)["total_panels"] * 2
         wall_panels += panel_count(Wc, panel_width_m)["total_panels"] * 2
-        
-        # Patalok panellari
-        ceiling_panels = math.ceil(Lc / panel_width_m) * math.ceil(Wc / panel_width_m)
-        
+
+        # Patalok/pol devor qalinligini hisobga oladi - ular devorlar ICHKARISIDA
+        # yotadi, shuning uchun ichki (tоза) o'lcham ishlatiladi, tashqi emas.
+        # Devor panel soni bilan bir xil (tolerantli) yaxlitlash usuli qo'llanadi,
+        # aks holda bir xil devor uzunligi uchun ikki xil panel soni chiqadi.
+        inner_Lc = max(Lc - 2 * T, 0.01)
+        inner_Wc = max(Wc - 2 * T, 0.01)
+        ceiling_panels = (panel_count(inner_Lc, panel_width_m)["total_panels"] *
+                          panel_count(inner_Wc, panel_width_m)["total_panels"])
+
         # Pol panellari - agar PUR panel bo'lsa, panel hisoblanadi, beton bo'lsa 0
         if pol_bor and pol_material == "PUR panel":
             floor_panels = ceiling_panels
         else:
             floor_panels = 0
-        
+
         # Maydonlar
         wall_area = 2 * (Lc + Wc) * Hc
-        ceiling_area = Lc * Wc
-        floor_area = Lc * Wc if pol_bor else 0
+        ceiling_area = inner_Lc * inner_Wc
+        floor_area = inner_Lc * inner_Wc if pol_bor else 0
         
         chamber_stats.append({
             "id": ch["id"],
@@ -424,21 +493,24 @@ def calculate_multi_panels(L, W, heights_list, n_chambers, wall_mm,
         
         corridor_wall_panels = panel_count(corr_L, panel_width_m)["total_panels"] * 2
         corridor_wall_panels += panel_count(corr_W, panel_width_m)["total_panels"] * 2
-        
-        # Yo'lak patalok panellari
-        corridor_ceiling_panels = math.ceil(corr_L / panel_width_m) * math.ceil(corr_W / panel_width_m)
-        
+
+        # Yo'lak patalok panellari - ichki (devor qalinligidan tozalangan) o'lcham bilan
+        inner_corr_L = max(corr_L - 2 * T, 0.01)
+        inner_corr_W = max(corr_W - 2 * T, 0.01)
+        corridor_ceiling_panels = (panel_count(inner_corr_L, panel_width_m)["total_panels"] *
+                                   panel_count(inner_corr_W, panel_width_m)["total_panels"])
+
         # Yo'lak pol panellari - faqat PUR panel bo'lsa
         if pol_bor and pol_material == "PUR panel":
             corridor_floor_panels = corridor_ceiling_panels
         else:
             corridor_floor_panels = 0
-            
+
         corridor_panels = corridor_wall_panels + corridor_ceiling_panels + corridor_floor_panels
-        
+
         corridor_wall_area = 2 * (corr_L + corr_W) * max(heights_list) if heights_list else 0
-        corridor_ceiling_area = corr_L * corr_W
-        corridor_floor_area = corr_L * corr_W if pol_bor else 0
+        corridor_ceiling_area = inner_corr_L * inner_corr_W
+        corridor_floor_area = inner_corr_L * inner_corr_W if pol_bor else 0
     
     # ===== ASOSIY JAMI PANELLAR (QO'SHIMCHALARSIZ) =====
     total_wall_panels_final = total_wall_panels + corridor_wall_panels
@@ -575,292 +647,31 @@ def calculate_multi_panels(L, W, heights_list, n_chambers, wall_mm,
 # ========== GERMITIKA HISOBI (50 m² = 24 dona) ==========
 def calculate_germitika(total_area_m2):
     """
-    Germitika (muhrlovchi material/lenta) miqdorini hisoblaydi
-    50 m² = 24 dona asosida to'g'ri proportsiya
-    
+    Germitika (muhrlovchi material) miqdorini hisoblaydi
+    50 m² = 22 dona asosida to'g'ri proportsiya
+
     Args:
-        total_area_m2 (float): Umumiy maydon (m²) - pol maydoni
-    
+        total_area_m2 (float): Jami maydon (m²) - devor + patalok + pol
+            yuzalarining yig'indisi (faqat pol maydoni emas)
+
     Returns:
         dict: Germitika hisobi natijalari
     """
     if total_area_m2 <= 0:
-        return {"germitika_soni": 0, "zaxira_bilan": 0, "hisob_metodi": "Maydon noto'g'ri"}
-    
-    # 50 m² ga 24 dona -> 1 m² ga 0.48 dona
-    # Proportsiya: (maydon / 50) * 24
-    germitika_soni = (total_area_m2 / 50) * 24
-    
-    # Butun songa yaxlitlash (har doim yuqoriga - yetarli bo'lishi uchun)
+        return {"germitika_soni": 0, "germitika_aniq": 0, "hisob_metodi": "Maydon noto'g'ri", "asos": "50 m² = 22 dona"}
+
+    # 50 m² ga 22 dona -> Proportsiya: (maydon / 50) * 22
+    germitika_soni = (total_area_m2 / 50) * 22
+
+    # Butun songa yaxlitlaymiz (har doim yuqoriga - yetarli bo'lishi uchun)
     germitika_soni_rounded = int(math.ceil(germitika_soni))
-    
-    # 15% zaxira qo'shamiz
-    
+
     return {
         "germitika_soni": germitika_soni_rounded,
         "germitika_aniq": round(germitika_soni, 2),
-        "hisob_metodi": f"{total_area_m2:.1f} m² / 50 m² × 24 = {germitika_soni:.2f} → {germitika_soni_rounded} ta",
-        "asos": "50 m² = 24 dona"
+        "hisob_metodi": f"{total_area_m2:.1f} m² / 50 m² × 22 = {germitika_soni:.2f} → {germitika_soni_rounded} ta",
+        "asos": "50 m² = 22 dona"
     }
-
-def create_architectural_drawing(L, W, H, wall_mm, n_chambers=4, has_corridor=True, corridor_w=2.5, corridor_pos="markaz", heights_list=None, eshiklar=None):
-    """
-     arxitektura chizmasini yaratadi (plan, kesim, fasad)
-    AutoCAD uslubida, aniq masshtabda
-    """
-    import math
-    from datetime import datetime
-    
-    # Eshiklar parametri ishlatilmasa ham funksiya ishlashi uchun
-    # eshiklar parametrini qabul qiladi lekin ishlatmaydi
-    
-    T = wall_mm / 1000.0
-    
-    # Agar heights_list bo'lmasa
-    if heights_list is None:
-        heights_list = [H] * n_chambers
-    
-    # SVG o'lchamlari
-    WIDTH, HEIGHT = 1400, 1000
-    scale = min(550 / max(L, W), 400 / H) * 1.1
-    
-    # Plan pozitsiyasi
-    plan_x = 80
-    plan_y = 70
-    plan_w = L * scale
-    plan_h = W * scale
-    
-    # Kesim pozitsiyasi
-    kesim_x = 80
-    kesim_y = 500
-    kesim_w = L * scale
-    kesim_h = H * scale
-    
-    # Fasad pozitsiyasi
-    fasad_x = 740
-    fasad_y = 500
-    fasad_w = L * scale
-    fasad_h = H * scale
-    
-    # Kamera va yo'lakni hisoblash
-    chambers = []
-    if has_corridor and corridor_pos == "markaz" and corridor_w > 0:
-        n_left = int(math.ceil(n_chambers / 2))
-        n_right = n_chambers - n_left
-        cham_L = (L - corridor_w) / 2
-        cham_W_left = W / n_left
-        cham_W_right = W / n_right if n_right > 0 else 0
-        for i in range(n_left):
-            chambers.append({"id": i+1, "x": 0, "y": i * cham_W_left, "w": cham_L, "h": cham_W_left})
-        for i in range(n_right):
-            chambers.append({"id": n_left+i+1, "x": cham_L + corridor_w, "y": i * cham_W_right, "w": cham_L, "h": cham_W_right})
-        corridor = {"x": cham_L, "y": 0, "w": corridor_w, "h": W}
-    elif has_corridor and corridor_w > 0 and corridor_pos in ("chap", "o'ng"):
-        cham_L = L - corridor_w
-        cham_W = W / n_chambers
-        offset_x = corridor_w if corridor_pos == "chap" else 0
-        for i in range(n_chambers):
-            chambers.append({"id": i+1, "x": offset_x, "y": i * cham_W, "w": cham_L, "h": cham_W})
-        corridor = {"x": 0 if corridor_pos == "chap" else L - corridor_w, "y": 0, "w": corridor_w, "h": W}
-    else:
-        cham_L = L / n_chambers
-        cham_W = W
-        for i in range(n_chambers):
-            chambers.append({"id": i+1, "x": i * cham_L, "y": 0, "w": cham_L, "h": cham_W})
-        corridor = None
-    
-    # Loyiha nomi (agar mavjud bo'lsa)
-    try:
-        proj_name = st.session_state.get('proj_name_multi', 'MULTI-KAMERA')
-    except:
-        proj_name = 'MULTI-KAMERA'
-    
-    svg = f'''<svg width="100%" viewBox="0 0 {WIDTH} {HEIGHT}" xmlns="http://www.w3.org/2000/svg" style="background:#ffffff;">
-    <defs>
-        <style>
-            text {{ font-family: 'Arial', 'Segoe UI', sans-serif; }}
-            .title {{ font-size: 16px; font-weight: bold; fill: #1a1a2e; }}
-            .subtitle {{ font-size: 11px; fill: #666; }}
-            .dim-line {{ stroke: #2563eb; stroke-width: 1; stroke-dasharray: 5,3; }}
-            .dim-text {{ font-size: 9px; fill: #1e3a8a; font-family: 'Arial'; }}
-            .wall-fill {{ fill: #f3f4f6; stroke: #374151; stroke-width: 2; }}
-            .door-fill {{ fill: none; stroke: #059669; stroke-width: 2; }}
-            .window-fill {{ fill: #bfdbfe; stroke: #3b82f6; stroke-width: 1.5; fill-opacity: 0.4; }}
-            .grid-line {{ stroke: #e5e7eb; stroke-width: 0.5; }}
-            .label {{ font-size: 8px; fill: #6b7280; font-family: 'Arial'; }}
-            .section-line {{ stroke: #dc2626; stroke-width: 1.5; stroke-dasharray: 10,4; }}
-        </style>
-        <pattern id="hatch-concrete" patternUnits="userSpaceOnUse" width="6" height="6">
-            <line x1="0" y1="0" x2="6" y2="6" stroke="#9ca3af" stroke-width="0.5"/>
-        </pattern>
-        <pattern id="hatch-insulation" patternUnits="userSpaceOnUse" width="8" height="4">
-            <line x1="0" y1="0" x2="4" y2="4" stroke="#fcd34d" stroke-width="0.8"/>
-            <line x1="4" y1="0" x2="8" y2="4" stroke="#fcd34d" stroke-width="0.8"/>
-        </pattern>
-        <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
-        </marker>
-    </defs>
-    
-    <!-- ==================== RAMKA ==================== -->
-    <rect x="20" y="20" width="{WIDTH-40}" height="{HEIGHT-40}" fill="none" stroke="#000" stroke-width="2"/>
-    <rect x="25" y="25" width="{WIDTH-50}" height="{HEIGHT-50}" fill="none" stroke="#000" stroke-width="1"/>
-    
-    <!-- Loyiha nomi -->
-    <text x="{plan_x + plan_w/2}" y="45" text-anchor="middle" font-size="16" fill="#1e293b" font-weight="bold" letter-spacing="2">ARXITEKTURA QURILISH CHIZMASI</text>
-    
-    <!-- ==================== 1. PLAN (REJA) ==================== -->
-    <rect x="{plan_x-15}" y="{plan_y-35}" width="{plan_w+30}" height="{plan_h+50}" fill="#fafafa" rx="3" stroke="#ccc" stroke-width="1"/>
-    <text x="{plan_x + plan_w/2}" y="{plan_y-12}" text-anchor="middle" class="title">REJA · 1-QAVAT</text>
-    <text x="{plan_x + plan_w/2}" y="{plan_y+2}" text-anchor="middle" class="subtitle">M 1:{max(100, int(1/scale*100))}</text>
-    
-    <!-- Grid -->
-    <g class="grid-line">
-        {''.join([f'<line x1="{plan_x + i*scale}" y1="{plan_y}" x2="{plan_x + i*scale}" y2="{plan_y + plan_h}"/>' for i in range(0, int(L)+1)])}
-        {''.join([f'<line x1="{plan_x}" y1="{plan_y + i*scale}" x2="{plan_x + plan_w}" y2="{plan_y + i*scale}"/>' for i in range(0, int(W)+1)])}
-    </g>
-    
-    <!-- Tashqi devor -->
-    <rect x="{plan_x}" y="{plan_y}" width="{plan_w}" height="{plan_h}" class="wall-fill" rx="2"/>
-    
-    <!-- Ichki devor -->
-    <rect x="{plan_x + T*scale}" y="{plan_y + T*scale}" width="{plan_w - 2*T*scale}" height="{plan_h - 2*T*scale}" fill="#fff" stroke="#9ca3af" stroke-width="1"/>
-    
-    <!-- Devor qalinligi -->
-    <rect x="{plan_x}" y="{plan_y}" width="{T*scale}" height="{plan_h}" fill="url(#hatch-concrete)" stroke="#6b7280" stroke-width="0.5"/>
-    <rect x="{plan_x + plan_w - T*scale}" y="{plan_y}" width="{T*scale}" height="{plan_h}" fill="url(#hatch-concrete)" stroke="#6b7280" stroke-width="0.5"/>
-    <rect x="{plan_x}" y="{plan_y}" width="{plan_w}" height="{T*scale}" fill="url(#hatch-concrete)" stroke="#6b7280" stroke-width="0.5"/>
-    <rect x="{plan_x}" y="{plan_y + plan_h - T*scale}" width="{plan_w}" height="{T*scale}" fill="url(#hatch-concrete)" stroke="#6b7280" stroke-width="0.5"/>
-    
-    <!-- KAMERALAR -->
-    {''.join([f'''
-    <rect x="{plan_x + ch['x']*scale + T*scale}" y="{plan_y + ch['y']*scale + T*scale}" width="{ch['w']*scale - 2*T*scale}" height="{ch['h']*scale - 2*T*scale}" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="5,3"/>
-    <text x="{plan_x + (ch['x'] + ch['w']/2)*scale}" y="{plan_y + (ch['y'] + ch['h']/2)*scale + 5}" text-anchor="middle" font-size="11" fill="#1e40af" font-weight="bold">KAMERA {ch['id']}</text>
-    <text x="{plan_x + (ch['x'] + ch['w']/2)*scale}" y="{plan_y + (ch['y'] + ch['h']/2)*scale + 20}" text-anchor="middle" class="label">{ch['w']:.1f} x {ch['h']:.1f} m</text>
-    
-    <!-- Eshik -->
-    <line x1="{plan_x + (ch['x'] + ch['w']/2 - 0.5)*scale}" y1="{plan_y + ch['y']*scale}" x2="{plan_x + (ch['x'] + ch['w']/2 + 0.5)*scale}" y2="{plan_y + ch['y']*scale}" stroke="#059669" stroke-width="2.5"/>
-    <path d="M {plan_x + (ch['x'] + ch['w']/2 - 0.5)*scale} {plan_y + ch['y']*scale} Q {plan_x + (ch['x'] + ch['w']/2 - 0.5)*scale} {plan_y + ch['y']*scale - 15} {plan_x + (ch['x'] + ch['w']/2)*scale} {plan_y + ch['y']*scale}" fill="none" stroke="#059669" stroke-width="1.2" stroke-dasharray="3,2"/>
-    ''' for ch in chambers])}
-    
-    <!-- YO'LAK -->
-    {f'''
-    <rect x="{plan_x + corridor['x']*scale}" y="{plan_y + corridor['y']*scale}" width="{corridor['w']*scale}" height="{corridor['h']*scale}" fill="#fefce8" fill-opacity="0.6" stroke="#eab308" stroke-width="2" stroke-dasharray="6,3"/>
-    <text x="{plan_x + (corridor['x'] + corridor['w']/2)*scale}" y="{plan_y + corridor['h']*scale/2 + 5}" text-anchor="middle" font-size="12" fill="#ca8a04" font-weight="bold">YO'LAK</text>
-    <text x="{plan_x + (corridor['x'] + corridor['w']/2)*scale}" y="{plan_y + corridor['h']*scale/2 + 22}" text-anchor="middle" class="label">B = {corridor['w']:.1f} m</text>
-    ''' if corridor else ''}
-    
-    <!-- O'lchamlar -->
-    <line x1="{plan_x}" y1="{plan_y + plan_h + 22}" x2="{plan_x + plan_w}" y2="{plan_y + plan_h + 22}" class="dim-line"/>
-    <text x="{plan_x + plan_w/2}" y="{plan_y + plan_h + 38}" text-anchor="middle" class="dim-text">{L:.2f} m</text>
-    
-    <line x1="{plan_x - 32}" y1="{plan_y}" x2="{plan_x - 32}" y2="{plan_y + plan_h}" class="dim-line"/>
-    <text x="{plan_x - 48}" y="{plan_y + plan_h/2}" text-anchor="middle" class="dim-text" transform="rotate(-90, {plan_x - 48}, {plan_y + plan_h/2})">{W:.2f} m</text>
-    
-    <!-- ==================== 2. KESIM ==================== -->
-    <rect x="{kesim_x-15}" y="{kesim_y-35}" width="{kesim_w+30}" height="{kesim_h+50}" fill="#fafafa" rx="3" stroke="#ccc" stroke-width="1"/>
-    <text x="{kesim_x + kesim_w/2}" y="{kesim_y-12}" text-anchor="middle" class="title">KESIM A-A</text>
-    <text x="{kesim_x + kesim_w/2}" y="{kesim_y+2}" text-anchor="middle" class="subtitle">M 1:{max(100, int(1/scale*100))}</text>
-    
-    <!-- Kesim chizig'i -->
-    <line x1="{plan_x}" y1="{plan_y + plan_h/2}" x2="{plan_x + plan_w}" y2="{plan_y + plan_h/2}" class="section-line"/>
-    <circle cx="{plan_x}" cy="{plan_y + plan_h/2}" r="4" fill="#dc2626"/>
-    <text x="{plan_x - 10}" y="{plan_y + plan_h/2 + 3}" font-size="9" fill="#dc2626" font-weight="bold">A</text>
-    <circle cx="{plan_x + plan_w}" cy="{plan_y + plan_h/2}" r="4" fill="#dc2626"/>
-    <text x="{plan_x + plan_w + 4}" y="{plan_y + plan_h/2 + 3}" font-size="9" fill="#dc2626" font-weight="bold">A</text>
-    
-    <!-- Poydevor -->
-    <rect x="{kesim_x - 10}" y="{kesim_y + kesim_h - 15}" width="{kesim_w + 20}" height="15" fill="url(#hatch-concrete)" stroke="#6b7280" stroke-width="1.5"/>
-    <text x="{kesim_x + kesim_w/2}" y="{kesim_y + kesim_h - 18}" text-anchor="middle" font-size="8" fill="#4b5563">BETON POYDEVOR</text>
-    
-    <!-- Zamin -->
-    <rect x="{kesim_x}" y="{kesim_y + kesim_h - T*scale}" width="{kesim_w}" height="{T*scale}" fill="url(#hatch-concrete)" stroke="#6b7280" stroke-width="1"/>
-    
-    <!-- Devorlar -->
-    <rect x="{kesim_x}" y="{kesim_y}" width="{T*scale}" height="{kesim_h}" fill="url(#hatch-insulation)" stroke="#6b7280" stroke-width="1"/>
-    <rect x="{kesim_x + kesim_w - T*scale}" y="{kesim_y}" width="{T*scale}" height="{kesim_h}" fill="url(#hatch-insulation)" stroke="#6b7280" stroke-width="1"/>
-    
-    <!-- Patalok -->
-    <rect x="{kesim_x}" y="{kesim_y}" width="{kesim_w}" height="{T*scale}" fill="url(#hatch-insulation)" stroke="#6b7280" stroke-width="1"/>
-    
-    <!-- Tom qiyaligi -->
-    <polygon points="{kesim_x + kesim_w/2 - 50},{kesim_y - 35} {kesim_x + kesim_w/2},{kesim_y - 60} {kesim_x + kesim_w/2 + 50},{kesim_y - 35}" fill="#e5e7eb" stroke="#9ca3af" stroke-width="1.5"/>
-    
-    <!-- Ichki belgi -->
-    <text x="{kesim_x + kesim_w/2}" y="{kesim_y + kesim_h/2}" text-anchor="middle" font-size="24" fill="#3b82f6"></text>
-    <text x="{kesim_x + kesim_w/2}" y="{kesim_y + kesim_h/2 + 20}" text-anchor="middle" class="label">SOVUTISH KAMERASI</text>
-    
-    <!-- O'lchamlar -->
-    <line x1="{kesim_x - 32}" y1="{kesim_y}" x2="{kesim_x - 32}" y2="{kesim_y + kesim_h}" class="dim-line"/>
-    <text x="{kesim_x - 48}" y="{kesim_y + kesim_h/2}" text-anchor="middle" class="dim-text" transform="rotate(-90, {kesim_x - 48}, {kesim_y + kesim_h/2})">H = {H:.2f} m</text>
-    
-    <!-- ==================== 3. FASAD ==================== -->
-    <rect x="{fasad_x-15}" y="{fasad_y-35}" width="{fasad_w+30}" height="{fasad_h+50}" fill="#fafafa" rx="3" stroke="#ccc" stroke-width="1"/>
-    <text x="{fasad_x + fasad_w/2}" y="{fasad_y-12}" text-anchor="middle" class="title">FASAD · OLD KO'RINISH</text>
-    <text x="{fasad_x + fasad_w/2}" y="{fasad_y+2}" text-anchor="middle" class="subtitle">M 1:{max(100, int(1/scale*100))}</text>
-    
-    <!-- Asosiy blok -->
-    <rect x="{fasad_x}" y="{fasad_y}" width="{fasad_w}" height="{fasad_h}" fill="#f3f4f6" stroke="#374151" stroke-width="2.5"/>
-    
-    <!-- Panel chiziqlari -->
-    <g stroke="#d1d5db" stroke-width="1" stroke-dasharray="4,3">
-        {''.join([f'<line x1="{fasad_x + i*1.16*scale}" y1="{fasad_y}" x2="{fasad_x + i*1.16*scale}" y2="{fasad_y + fasad_h}"/>' for i in range(1, int(L/1.16)+1)])}
-    </g>
-    
-    <!-- Eshik -->
-    <rect x="{fasad_x + fasad_w*0.32}" y="{fasad_y + fasad_h*0.55}" width="{fasad_w*0.36}" height="{fasad_h*0.4}" class="door-fill" rx="2"/>
-    <line x1="{fasad_x + fasad_w*0.5}" y1="{fasad_y + fasad_h*0.55}" x2="{fasad_x + fasad_w*0.5}" y2="{fasad_y + fasad_h*0.95}" stroke="#059669" stroke-width="2"/>
-    <text x="{fasad_x + fasad_w/2}" y="{fasad_y + fasad_h*0.52}" text-anchor="middle" font-size="8" fill="#059669">IKKI QANOTLI ESHIK</text>
-    
-    <!-- Derazalar -->
-    <rect x="{fasad_x + fasad_w*0.75}" y="{fasad_y + fasad_h*0.15}" width="{fasad_w*0.12}" height="{fasad_h*0.28}" class="window-fill" rx="1"/>
-    <rect x="{fasad_x + fasad_w*0.88}" y="{fasad_y + fasad_h*0.15}" width="{fasad_w*0.08}" height="{fasad_h*0.28}" class="window-fill" rx="1"/>
-    
-    <!-- O'lchamlar -->
-    <line x1="{fasad_x}" y1="{fasad_y + fasad_h + 32}" x2="{fasad_x + fasad_w}" y2="{fasad_y + fasad_h + 32}" class="dim-line"/>
-    <text x="{fasad_x + fasad_w/2}" y="{fasad_y + fasad_h + 48}" text-anchor="middle" class="dim-text">L = {L:.2f} m</text>
-    
-    <line x1="{fasad_x - 32}" y1="{fasad_y}" x2="{fasad_x - 32}" y2="{fasad_y + fasad_h}" class="dim-line"/>
-    <text x="{fasad_x - 48}" y="{fasad_y + fasad_h/2}" text-anchor="middle" class="dim-text" transform="rotate(-90, {fasad_x - 48}, {fasad_y + fasad_h/2})">H = {H:.2f} m</text>
-    
-    <!-- ==================== TEXNIK MA'LUMOTLAR ==================== -->
-    <g transform="translate(60, {HEIGHT-180})">
-        <rect x="0" y="0" width="{WIDTH-120}" height="100" fill="#fff" stroke="#ccc" stroke-width="1" rx="4"/>
-        <rect x="0" y="0" width="{WIDTH-120}" height="22" fill="#1e293b" rx="4"/>
-        <text x="{(WIDTH-120)/2}" y="15" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">TEXNIK MA'LUMOTLAR</text>
-        
-        <text x="15" y="40" font-size="9" fill="#1f2937"> Tashqi o'lcham:</text>
-        <text x="120" y="40" font-size="9" fill="#4b5563">{L:.2f} x {W:.2f} x {H:.2f} m</text>
-        
-        <text x="320" y="40" font-size="9" fill="#1f2937"> Devor qalinligi:</text>
-        <text x="420" y="40" font-size="9" fill="#4b5563">{wall_mm} mm (PUR)</text>
-        
-        <text x="600" y="40" font-size="9" fill="#1f2937"> Sana:</text>
-        <text x="660" y="40" font-size="9" fill="#4b5563">{datetime.now().strftime("%d.%m.%Y")}</text>
-        
-        <text x="15" y="58" font-size="9" fill="#1f2937"> Kameralar soni:</text>
-        <text x="120" y="58" font-size="9" fill="#4b5563">{n_chambers} ta</text>
-        
-        <text x="320" y="58" font-size="9" fill="#1f2937"> Eshiklar soni:</text>
-        <text x="420" y="58" font-size="9" fill="#4b5563">{n_chambers} ta</text>
-        
-        <text x="600" y="58" font-size="9" fill="#1f2937"> Panel moduli:</text>
-        <text x="660" y="58" font-size="9" fill="#4b5563">1.16 m</text>
-        
-        <text x="15" y="76" font-size="9" fill="#1f2937"> Ish harorati:</text>
-        <text x="120" y="76" font-size="9" fill="#4b5563">-25°C dan +5°C gacha</text>
-        
-        <text x="320" y="76" font-size="9" fill="#1f2937"> Hajm:</text>
-        <text x="420" y="76" font-size="9" fill="#4b5563">{L*W*H:.1f} m³</text>
-        
-        <text x="600" y="76" font-size="9" fill="#1f2937"> Masshtab:</text>
-        <text x="660" y="76" font-size="9" fill="#4b5563">1:{max(100, int(1/scale*100))}</text>
-    </g>
-    
-  
-</svg>'''
-    
-    return svg
 
 def draw_svg(svg, height=3080):
     components.html(
@@ -868,7 +679,7 @@ def draw_svg(svg, height=3080):
         height=height, scrolling=True
     )
 
-def svgt(x,y,text,size=10,weight="normal",anchor="middle",rotate=None,color="#111"):
+def svgt(x,y,text,size=10,weight="normal",anchor="middle",rotate=None,color="#2F4A28"):
     rot=f' transform="rotate({rotate} {x},{y})"' if rotate is not None else ""
     return f'<text x="{x}" y="{y}" font-size="{size}" font-weight="{weight}" text-anchor="{anchor}" fill="{color}"{rot}>{text}</text>'
 def dim_h(x1, x2, y, text, color="#222", ext=6, size=9):
@@ -962,23 +773,15 @@ def chain_right(x, y, parts, scale, color="#222", fs=6):
         cur = ny
     return svg
 
-def ticks_h(x,y,parts,scale,color="#111"):
+def ticks_h(x,y,parts,scale,color="#2F4A28"):
     svg=""; cur=x
     for p in parts[:-1]: cur+=p["size"]*scale; svg+=f'<line x1="{cur}" y1="{y-3}" x2="{cur}" y2="{y+3}" stroke="{color}" stroke-width="0.6"/>'
     return svg
 
-def ticks_v(x,y,parts,scale,color="#111"):
+def ticks_v(x,y,parts,scale,color="#2F4A28"):
     svg=""; cur=y
     for p in parts[:-1]: cur+=p["size"]*scale; svg+=f'<line x1="{x-3}" y1="{cur}" x2="{x+3}" y2="{cur}" stroke="{color}" stroke-width="0.6"/>'
     return svg
-
-def build_segs(total_mm,corner=480,mod=960):
-    if total_mm<=0: return []
-    if total_mm<=corner*2: return [total_mm]
-    c=total_mm-corner*2; parts=[]
-    while c>mod: parts.append(mod); c-=mod
-    if c>0: parts.append(c)
-    return [corner]+parts+[corner]
 
 def seg_meta(parts,has_door=False,door_sz=960):
     res=[]; used=False
@@ -989,11 +792,11 @@ def seg_meta(parts,has_door=False,door_sz=960):
 
 def room_plan(x,y,ow,oh,wt):
     ix,iy=x+wt,y+wt; iw,ih=ow-2*wt,oh-2*wt
-    return (f'<rect x="{x}" y="{y}" width="{ow}" height="{oh}" fill="rgba(220,232,255,0.15)" stroke="#111" stroke-width="2"/>'
+    return (f'<rect x="{x}" y="{y}" width="{ow}" height="{oh}" fill="rgba(220,232,255,0.15)" stroke="#2F4A28" stroke-width="2"/>'
             f'<rect x="{ix}" y="{iy}" width="{iw}" height="{ih}" fill="rgba(235,245,255,0.4)" stroke="#555" stroke-width="1" stroke-dasharray="5,3"/>')
 
 def slab_svg(x, y, ow, oh, hmeta, vmeta, scale, label, ls=9):
-    s = (f'<rect x="{x}" y="{y}" width="{ow}" height="{oh}" fill="rgba(240,246,255,0.65)" stroke="#111" stroke-width="1.4"/>')
+    s = (f'<rect x="{x}" y="{y}" width="{ow}" height="{oh}" fill="rgba(240,246,255,0.65)" stroke="#2F4A28" stroke-width="1.4"/>')
     cx = x
     for p in hmeta[:-1]:
         cx += p["size"] * scale
@@ -1008,10 +811,7 @@ def arc_left(x, y, scale, off, dh=2000, dw=960, op="Ichkariga"):
     """Chap devorda eshik chizish"""
     top = y + off * scale
     r = dw * scale
-    
-    print(f"  arc_left: x={x}, y={y}, off={off}, scale={scale}")
-    print(f"  top={top}, r={r}, dh={dh}")
-    
+
     # Eshik ramkasi (ko'rinadigan qilib)
     frame = f'<rect x="{x-2}" y="{top-2}" width="4" height="{r+4}" fill="none" stroke="#1a1a2e" stroke-width="2"/>'
     
@@ -1038,13 +838,13 @@ def arc_right(x, y, ow, scale, off, dh=2000, dw=960, op="Ichkariga"):
     top = y + off * scale
     r = dw * scale
     gap = f'<rect x="{rx-3}" y="{top}" width="5" height="{r}" fill="white" stroke="none"/>'
-    leaf = f'<line x1="{rx}" y1="{top}" x2="{rx}" y2="{top+r}" stroke="#111" stroke-width="2.5"/>'
+    leaf = f'<line x1="{rx}" y1="{top}" x2="{rx}" y2="{top+r}" stroke="#2F4A28" stroke-width="2.5"/>'
     if op == "Ichkariga":
-        arc = f'<path d="M {rx} {top+r} A {r} {r} 0 0 0 {rx-r} {top}" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4,3"/>'
-        oln = f'<line x1="{rx}" y1="{top}" x2="{rx-r}" y2="{top}" stroke="#111" stroke-width="1.5"/>'
+        arc = f'<path d="M {rx} {top+r} A {r} {r} 0 0 0 {rx-r} {top}" fill="none" stroke="#2F4A28" stroke-width="1" stroke-dasharray="4,3"/>'
+        oln = f'<line x1="{rx}" y1="{top}" x2="{rx-r}" y2="{top}" stroke="#2F4A28" stroke-width="1.5"/>'
     else:
-        arc = f'<path d="M {rx} {top+r} A {r} {r} 0 0 1 {rx+r} {top}" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4,3"/>'
-        oln = f'<line x1="{rx}" y1="{top}" x2="{rx+r}" y2="{top}" stroke="#111" stroke-width="1.5"/>'
+        arc = f'<path d="M {rx} {top+r} A {r} {r} 0 0 1 {rx+r} {top}" fill="none" stroke="#2F4A28" stroke-width="1" stroke-dasharray="4,3"/>'
+        oln = f'<line x1="{rx}" y1="{top}" x2="{rx+r}" y2="{top}" stroke="#2F4A28" stroke-width="1.5"/>'
     return gap + leaf + arc + oln
 
 def arc_bottom(x, y, oh, scale, off, dw=960, op="Ichkariga"):
@@ -1052,94 +852,53 @@ def arc_bottom(x, y, oh, scale, off, dw=960, op="Ichkariga"):
     left = x + off * scale
     r = dw * scale
     gap = f'<rect x="{left}" y="{by-2}" width="{r}" height="5" fill="white" stroke="none"/>'
-    leaf = f'<line x1="{left}" y1="{by}" x2="{left+r}" y2="{by}" stroke="#111" stroke-width="2.5"/>'
+    leaf = f'<line x1="{left}" y1="{by}" x2="{left+r}" y2="{by}" stroke="#2F4A28" stroke-width="2.5"/>'
     if op == "Ichkariga":
-        arc = f'<path d="M {left} {by} A {r} {r} 0 0 0 {left+r} {by-r}" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4,3"/>'
-        oln = f'<line x1="{left+r}" y1="{by}" x2="{left+r}" y2="{by-r}" stroke="#111" stroke-width="1.5"/>'
+        arc = f'<path d="M {left} {by} A {r} {r} 0 0 0 {left+r} {by-r}" fill="none" stroke="#2F4A28" stroke-width="1" stroke-dasharray="4,3"/>'
+        oln = f'<line x1="{left+r}" y1="{by}" x2="{left+r}" y2="{by-r}" stroke="#2F4A28" stroke-width="1.5"/>'
     else:
-        arc = f'<path d="M {left} {by} A {r} {r} 0 0 1 {left+r} {by+r}" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4,3"/>'
-        oln = f'<line x1="{left+r}" y1="{by}" x2="{left+r}" y2="{by+r}" stroke="#111" stroke-width="1.5"/>'
+        arc = f'<path d="M {left} {by} A {r} {r} 0 0 1 {left+r} {by+r}" fill="none" stroke="#2F4A28" stroke-width="1" stroke-dasharray="4,3"/>'
+        oln = f'<line x1="{left+r}" y1="{by}" x2="{left+r}" y2="{by+r}" stroke="#2F4A28" stroke-width="1.5"/>'
     return gap + leaf + arc + oln
 
 def arc_top(x, y, scale, off, dw=960, op="Ichkariga"):
     left = x + off * scale
     r = dw * scale
     gap = f'<rect x="{left}" y="{y-3}" width="{r}" height="5" fill="white" stroke="none"/>'
-    leaf = f'<line x1="{left}" y1="{y}" x2="{left+r}" y2="{y}" stroke="#111" stroke-width="2.5"/>'
+    leaf = f'<line x1="{left}" y1="{y}" x2="{left+r}" y2="{y}" stroke="#2F4A28" stroke-width="2.5"/>'
     if op == "Ichkariga":
-        arc = f'<path d="M {left} {y} A {r} {r} 0 0 1 {left+r} {y+r}" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4,3"/>'
-        oln = f'<line x1="{left+r}" y1="{y}" x2="{left+r}" y2="{y+r}" stroke="#111" stroke-width="1.5"/>'
+        arc = f'<path d="M {left} {y} A {r} {r} 0 0 1 {left+r} {y+r}" fill="none" stroke="#2F4A28" stroke-width="1" stroke-dasharray="4,3"/>'
+        oln = f'<line x1="{left+r}" y1="{y}" x2="{left+r}" y2="{y+r}" stroke="#2F4A28" stroke-width="1.5"/>'
     else:
-        arc = f'<path d="M {left} {y} A {r} {r} 0 0 0 {left+r} {y-r}" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4,3"/>'
-        oln = f'<line x1="{left+r}" y1="{y}" x2="{left+r}" y2="{y-r}" stroke="#111" stroke-width="1.5"/>'
+        arc = f'<path d="M {left} {y} A {r} {r} 0 0 0 {left+r} {y-r}" fill="none" stroke="#2F4A28" stroke-width="1" stroke-dasharray="4,3"/>'
+        oln = f'<line x1="{left+r}" y1="{y}" x2="{left+r}" y2="{y-r}" stroke="#2F4A28" stroke-width="1.5"/>'
     return gap + leaf + arc + oln
 
 def title_block(x, y, w, h, proj, code, Lmm, Wmm, Hmm, wall, ceil, floor, date):
     c2, c3 = x+260, x+430
     return f"""<g>
     <rect x="{x}" y="{y}" width="{w}" height="{h}" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="4"/>
-    <rect x="{x}" y="{y}" width="{w}" height="24" fill="#1e293b" rx="4"/>
-    <rect x="{x}" y="{y+12}" width="{w}" height="12" fill="#1e293b"/>
+    <rect x="{x}" y="{y}" width="{w}" height="24" fill="#3E6F2E" rx="4"/>
+    <rect x="{x}" y="{y+12}" width="{w}" height="12" fill="#3E6F2E"/>
     <text x="{x+w/2}" y="{y+16}" font-size="11" fill="white" text-anchor="middle" font-weight="bold" font-family="Arial">ASOSIY MA'LUMOTLAR</text>
     
     <text x="{x+15}" y="{y+38}" font-size="9" fill="#1f2937" font-family="Arial">Loyiha:</text>
-    <text x="{x+80}" y="{y+38}" font-size="9" fill="#0f172a" font-weight="600" font-family="Arial">{proj}</text>
+    <text x="{x+80}" y="{y+38}" font-size="9" fill="#2F4A28" font-weight="600" font-family="Arial">{proj}</text>
     
     <text x="{x+15}" y="{y+54}" font-size="9" fill="#1f2937" font-family="Arial">Kod:</text>
-    <text x="{x+80}" y="{y+54}" font-size="9" fill="#0f172a" font-weight="600" font-family="Arial">{code}</text>
+    <text x="{x+80}" y="{y+54}" font-size="9" fill="#2F4A28" font-weight="600" font-family="Arial">{code}</text>
     
     <text x="{x+200}" y="{y+38}" font-size="9" fill="#1f2937" font-family="Arial">Sana:</text>
-    <text x="{x+260}" y="{y+38}" font-size="9" fill="#0f172a" font-weight="600" font-family="Arial">{date}</text>
+    <text x="{x+260}" y="{y+38}" font-size="9" fill="#2F4A28" font-weight="600" font-family="Arial">{date}</text>
     
     <text x="{x+200}" y="{y+54}" font-size="9" fill="#1f2937" font-family="Arial">Masshtab:</text>
-    <text x="{x+260}" y="{y+54}" font-size="9" fill="#0f172a" font-weight="600" font-family="Arial">1:50</text>
+    <text x="{x+260}" y="{y+54}" font-size="9" fill="#2F4A28" font-weight="600" font-family="Arial">1:50</text>
     
     <text x="{x+400}" y="{y+38}" font-size="9" fill="#1f2937" font-family="Arial">Olcham:</text>
-    <text x="{x+460}" y="{y+38}" font-size="9" fill="#0f172a" font-weight="600" font-family="Arial">{Lmm}x{Wmm}x{Hmm} mm</text>
+    <text x="{x+460}" y="{y+38}" font-size="9" fill="#2F4A28" font-weight="600" font-family="Arial">{Lmm}x{Wmm}x{Hmm} mm</text>
     
     <text x="{x+400}" y="{y+54}" font-size="9" fill="#1f2937" font-family="Arial">Devor:</text>
-    <text x="{x+460}" y="{y+54}" font-size="9" fill="#0f172a" font-weight="600" font-family="Arial">{wall} mm</text>
-</g>"""
-def arc_right(x,y,ow,scale,off,dh=2000,dw=960,op="Ichkariga"):
-    rx=x+ow; top=y+off*scale; r=dw*scale
-    gap=f'<rect x="{rx-3}" y="{top}" width="5" height="{r}" fill="white" stroke="none"/>'
-    leaf=f'<line x1="{rx}" y1="{top}" x2="{rx}" y2="{top+r}" stroke="#111" stroke-width="2.5"/>'
-    if op=="Ichkariga":
-        arc=f'<path d="M {rx} {top+r} A {r} {r} 0 0 0 {rx-r} {top}" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4,3"/>'
-        oln=f'<line x1="{rx}" y1="{top}" x2="{rx-r}" y2="{top}" stroke="#111" stroke-width="1.5"/>'
-    else:
-        arc=f'<path d="M {rx} {top+r} A {r} {r} 0 0 1 {rx+r} {top}" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4,3"/>'
-        oln=f'<line x1="{rx}" y1="{top}" x2="{rx+r}" y2="{top}" stroke="#111" stroke-width="1.5"/>'
-    return gap+leaf+arc+oln
-
-def arc_bottom(x,y,oh,scale,off,dw=960,op="Ichkariga"):
-    by=y+oh; left=x+off*scale; r=dw*scale
-    gap=f'<rect x="{left}" y="{by-2}" width="{r}" height="5" fill="white" stroke="none"/>'
-    leaf=f'<line x1="{left}" y1="{by}" x2="{left+r}" y2="{by}" stroke="#111" stroke-width="2.5"/>'
-    if op=="Ichkariga":
-        arc=f'<path d="M {left} {by} A {r} {r} 0 0 0 {left+r} {by-r}" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4,3"/>'
-        oln=f'<line x1="{left+r}" y1="{by}" x2="{left+r}" y2="{by-r}" stroke="#111" stroke-width="1.5"/>'
-    else:
-        arc=f'<path d="M {left} {by} A {r} {r} 0 0 1 {left+r} {by+r}" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4,3"/>'
-        oln=f'<line x1="{left+r}" y1="{by}" x2="{left+r}" y2="{by+r}" stroke="#111" stroke-width="1.5"/>'
-    return gap+leaf+arc+oln
-
-def arc_top(x,y,scale,off,dw=960,op="Ichkariga"):
-    left=x+off*scale; r=dw*scale
-    gap=f'<rect x="{left}" y="{y-3}" width="{r}" height="5" fill="white" stroke="none"/>'
-    leaf=f'<line x1="{left}" y1="{y}" x2="{left+r}" y2="{y}" stroke="#111" stroke-width="2.5"/>'
-    if op=="Ichkariga":
-        arc=f'<path d="M {left} {y} A {r} {r} 0 0 1 {left+r} {y+r}" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4,3"/>'
-        oln=f'<line x1="{left+r}" y1="{y}" x2="{left+r}" y2="{y+r}" stroke="#111" stroke-width="1.5"/>'
-    else:
-        arc=f'<path d="M {left} {y} A {r} {r} 0 0 0 {left+r} {y-r}" fill="none" stroke="#111" stroke-width="1" stroke-dasharray="4,3"/>'
-        oln=f'<line x1="{left+r}" y1="{y}" x2="{left+r}" y2="{y-r}" stroke="#111" stroke-width="1.5"/>'
-    return gap+leaf+arc+oln
-
-def title_block(x,y,w,h,proj,code,Lmm,Wmm,Hmm,wall,ceil,floor,date):
-    c2,c3=x+260,x+430
-    return f"""<g>
-
+    <text x="{x+460}" y="{y+54}" font-size="9" fill="#2F4A28" font-weight="600" font-family="Arial">{wall} mm</text>
 </g>"""
 
 C = {
@@ -1158,298 +917,96 @@ C = {
     "evap":"#D1D5DB",
     "evap_fin":"#9CA3AF",
 }
-def door_off(parts, pos, side="vertical", dsz=960):
+def split_corner_segs(segs, has_left_corner, has_right_corner):
+    """
+    build_wall_segs() natijasidan burchak panellarini POZITSIYA bo'yicha ajratadi
+    (qiymati 480 ga tengligini tekshirib emas!). build_wall_segs har doim chap
+    burchakni segs[0] ga, o'ng burchakni segs[-1] ga qo'yadi - shu pozitsiyalarga
+    ishonamiz, chunki oddiy (burchak bo'lmagan) asosiy panel ham tasodifan
+    480mm bo'lib qolishi mumkin va uni qiymati bo'yicha aniqlash uni burchak
+    bilan chalkashtirib, panelni jadvaldan tushirib qo'yishi yoki eshik joyini
+    noto'g'ri hisoblashiga olib keladi.
+    """
+    start = 1 if has_left_corner else 0
+    end = len(segs) - 1 if has_right_corner else len(segs)
+    if end < start:
+        end = start
+    return segs[start:end]
+
+
+def door_off(parts, pos, side="vertical", dsz=960, has_left_corner=None, has_right_corner=None):
     """
     Eshik ofsetini hisoblaydi - 5 VARIANT BILAN
-    BURCHAK PANELLARINI (480) HISOBGA OLMAYDI!
-    
+    BURCHAK PANELLARINI HISOBGA OLMAYDI - eshik burchak panellari orasidagi
+    ASOSIY (main) maydonga nisbatan joylashtiriladi (butun devor bo'yicha emas).
+
     parts: devor segmentlari ro'yxati (mm da)
     pos: pozitsiya ("Chap tomon burchak o'rniga", "Biroz chapga", "O'rta", "Biroz o'ngga", "O'ng tomon burchak o'rniga")
     side: "vertical" yoki "horizontal"
     dsz: eshik kengligi (mm)
+    has_left_corner/has_right_corner: build_wall_segs()ga uzatilgan burchak
+        bayroqlari (bilinsa, aniq shularni bering!). Berilmasa (None), chegara
+        elementining qiymati 480 ga tengligiga qarab (eski, noaniq) taxmin qilinadi.
     """
-    if not parts:
-        return 0
-    
-    # ===== 1. BURCHAK PANELLARINI ANIQLASH =====
-    # 480 mm burchak panellarini hisobdan chiqaramiz
-    main_parts = [p for p in parts if p != 480]
-    
-    # Agar barchasi burchak paneli bo'lsa (480)
+    if not parts or dsz <= 0:
+        return 0.0
+
+    if has_left_corner is None:
+        has_left_corner = parts[0] == 480
+    if has_right_corner is None:
+        has_right_corner = len(parts) > 1 and parts[-1] == 480
+
+    main_parts = split_corner_segs(parts, has_left_corner, has_right_corner)
+
+    # Agar barchasi burchak paneli bo'lsa (main qism yo'q) - kamdan-kam holat
     if not main_parts:
-        # Burchak panellarining umumiy uzunligi
         total = sum(parts)
         door_width = min(dsz, total)
         if pos == "Chap tomon burchak o'rniga":
-            return 0
+            return 0.0
         elif pos == "O'ng tomon burchak o'rniga":
-            return total - door_width
+            return float(total - door_width)
         else:
-            return (total - door_width) / 2
-    
+            return float((total - door_width) / 2)
+
     # ===== 2. ASOSIY PANELLAR UZUNLIGI =====
     main_total = sum(main_parts)
     door_width = min(dsz, main_total)
-    
-    # ===== 3. BURCHAK PANELLARINING JOYLASHUVI =====
-    # Chap burchak paneli borligini tekshiramiz
-    has_left_corner = parts[0] == 480 if parts else False
-    # O'ng burchak paneli borligini tekshiramiz
-    has_right_corner = parts[-1] == 480 if parts else False
-    
-    # Chap burchak panelining kengligi
+
+    # ===== 3. BURCHAK PANELLARINING O'LCHAMI =====
     left_corner_size = parts[0] if has_left_corner else 0
-    # O'ng burchak panelining kengligi
     right_corner_size = parts[-1] if has_right_corner else 0
-    
+
     # ===== 4. ESHIK OFSETINI HISOBLASH =====
+    # Har bir "asosiy maydon ichidagi" ofset [0, main_total-door_width] oralig'iga
+    # qisilgan (clamp) - shu bilan eshik hech qachon burchak paneliga qadab
+    # (overlap) chizilmaydi.
+    max_offset_in_main = max(main_total - door_width, 0)
+
     if pos == "Chap tomon burchak o'rniga":
-        # Chap burchakda - chap burchak panelining oxiridan boshlab
-        return left_corner_size
-    
+        return float(left_corner_size)
+
     elif pos == "Biroz chapga":
-        # Chap burchakdan 300 mm keyin
-        return left_corner_size + 300
-    
+        return float(left_corner_size + min(300, max_offset_in_main))
+
     elif pos == "O'rta":
-        # ASOSIY PANELLARNING O'RTASIDA - aniq markazda!
-        # Eshik faqat asosiy panellar oralig'ida bo'ladi
-        offset_in_main = (main_total - door_width) / 2
-        return left_corner_size + offset_in_main
-    
+        # ASOSIY PANELLARNING O'RTASIDA - butun devor emas, faqat burchaklarsiz
+        # oraliqning markazi (burchaklar assimetrik bo'lsa ham to'g'ri ishlaydi)
+        return float(left_corner_size + max_offset_in_main / 2)
+
     elif pos == "Biroz o'ngga":
-        # O'ng burchakdan 300 mm oldin
-        return left_corner_size + main_total - door_width - 300
-    
+        return float(left_corner_size + max(max_offset_in_main - 300, 0))
+
     elif pos == "O'ng tomon burchak o'rniga":
-        # O'ng burchakda - o'ng burchak panelining boshidan
-        return left_corner_size + main_total - door_width
-    
+        return float(left_corner_size + max_offset_in_main)
+
     else:
         # Default: o'rta
-        offset_in_main = (main_total - door_width) / 2
-        return left_corner_size + offset_in_main
+        return float(left_corner_size + max_offset_in_main / 2)
 
-
-
-def box3d(fig,x,y,z,dx,dy,dz,color,name="",opacity=1.0,ec=None):
-    ec=ec or C["eg"]
-    vx=[x,x+dx,x+dx,x,x,x+dx,x+dx,x]
-    vy=[y,y,y+dy,y+dy,y,y,y+dy,y+dy]
-    vz=[z,z,z,z,z+dz,z+dz,z+dz,z+dz]
-    fig.add_trace(go.Mesh3d(
-        x=vx,y=vy,z=vz,
-        i=[7,0,0,0,4,4,6,6,4,0,3,2],
-        j=[3,4,1,2,5,6,5,2,0,1,6,3],
-        k=[0,7,2,3,6,7,1,1,5,5,7,6],
-        color=color,opacity=opacity,flatshading=True,
-        lighting=dict(ambient=0.78,diffuse=0.58,specular=0.10,roughness=0.85),
-        name=name,hoverinfo="text",text=name,showlegend=False
-    ))
-    edges=[(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),(0,4),(1,5),(2,6),(3,7)]
-    ex,ey,ez=[],[],[]
-    for a,b in edges:
-        ex+=[vx[a],vx[b],None]; ey+=[vy[a],vy[b],None]; ez+=[vz[a],vz[b],None]
-    fig.add_trace(go.Scatter3d(x=ex,y=ey,z=ez,mode="lines",
-        line=dict(color=ec,width=1.2),hoverinfo="skip",showlegend=False))
-
-def ln3(fig,x1,y1,z1,x2,y2,z2,color="#555",w=1.2):
-    fig.add_trace(go.Scatter3d(x=[x1,x2],y=[y1,y2],z=[z1,z2],mode="lines",
-        line=dict(color=color,width=w),hoverinfo="skip",showlegend=False))
-
-def tx3(fig,x,y,z,text,sz=10,color="#1A202C"):
-    fig.add_trace(go.Scatter3d(x=[x],y=[y],z=[z],mode="text",text=[text],
-        textposition="middle center",textfont=dict(size=sz,color=color,family="Arial"),
-        hoverinfo="skip",showlegend=False))
-
-def cylinder3(fig, cx, cy, z_bot, z_top, radius=0.04, color="#555", n=12):
-    angles = [2*math.pi*i/n for i in range(n+1)]
-    for i in range(n):
-        a0, a1 = angles[i], angles[i+1]
-        x0, y0 = cx+radius*math.cos(a0), cy+radius*math.sin(a0)
-        x1, y1 = cx+radius*math.cos(a1), cy+radius*math.sin(a1)
-        ln3(fig, x0,y0,z_bot, x1,y1,z_bot, color, 1.0)
-        ln3(fig, x0,y0,z_top, x1,y1,z_top, color, 1.0)
-        ln3(fig, x0,y0,z_bot, x0,y0,z_top, color, 0.8)
-
-# COMPRESSOR / CONDENSING UNIT (outdoor unit)
-def draw_compressor_unit(fig, cx, cy, cz, facing, brand="Bitzer", unit_type="split"):
-    if "sanoat" in unit_type.lower() or "Copeland" in brand:
-        W, D, H = 1.20, 0.60, 1.00
-    elif "Zanotti" in brand:
-        W, D, H = 1.05, 0.55, 0.85
-    else:
-        W, D, H = 0.95, 0.50, 0.80
-
-    leg_h = 0.12
-    leg_t = 0.04
-    box3d(fig, cx,          cy,          cz, leg_t, D, leg_h, C["comp_base"], "Poydevor", 1.0, "#1F2937")
-    box3d(fig, cx+W-leg_t,  cy,          cz, leg_t, D, leg_h, C["comp_base"], "Poydevor", 1.0, "#1F2937")
-    box3d(fig, cx,          cy,          cz, W, leg_t, leg_h, C["comp_base"], "Poydevor", 1.0, "#1F2937")
-    box3d(fig, cx,          cy+D-leg_t,  cz, W, leg_t, leg_h, C["comp_base"], "Poydevor", 1.0, "#1F2937")
-
-    z0 = cz + leg_h
-
-    box3d(fig, cx, cy, z0, W, D, H, C["comp_body"], f"Kompressor: {brand}", 1.0, "#0F2744")
-
-    louver_c = "#152B45"
-    for i in range(5):
-        lz = z0 + H*0.2 + i*(H*0.55/5)
-        box3d(fig, cx-0.005, cy+D*0.05, lz, 0.01, D*0.90, H*0.07, louver_c, "", 1.0, "#0A1E36")
-        box3d(fig, cx+W-0.005, cy+D*0.05, lz, 0.01, D*0.90, H*0.07, louver_c, "", 1.0, "#0A1E36")
-
-    box3d(fig, cx+W*0.05, cy-0.005, z0+H*0.55, W*0.35, 0.01, H*0.30,
-          C["comp_panel"], "Kontrol panel", 1.0, "#1A3A5C")
-    for li, lc in enumerate(["#22C55E","#EAB308","#EF4444"]):
-        fig.add_trace(go.Scatter3d(
-            x=[cx+W*0.10 + li*0.06], y=[cy-0.01], z=[z0+H*0.72],
-            mode='markers', marker=dict(size=5, color=lc, symbol='circle'),
-            showlegend=False, hoverinfo='skip'))
-
-    fan_grille_t = 0.025
-    box3d(fig, cx+0.03, cy+0.03, z0+H, W-0.06, D-0.06, fan_grille_t,
-          "#1A3A5C", "Fan grille", 1.0, "#0F2744")
-    for gi in range(4):
-        gx = cx + 0.05 + gi*(W-0.10)/3
-        ln3(fig, gx, cy+0.03, z0+H+fan_grille_t*0.5,
-               gx, cy+D-0.03, z0+H+fan_grille_t*0.5, "#0F2744", 1.0)
-    for gi in range(3):
-        gy = cy + 0.05 + gi*(D-0.10)/2
-        ln3(fig, cx+0.03, gy, z0+H+fan_grille_t*0.5,
-               cx+W-0.03, gy, z0+H+fan_grille_t*0.5, "#0F2744", 1.0)
-
-    n_fans = 2 if W > 0.80 else 1
-    for fi in range(n_fans):
-        fx = cx + W/(n_fans*2) + fi*(W/n_fans)
-        fy = cy + D/2
-        fz = z0 + H + fan_grille_t + 0.01
-        fig.add_trace(go.Scatter3d(
-            x=[fx], y=[fy], z=[fz], mode='markers',
-            marker=dict(size=20, color='#1E40AF', symbol='circle',
-                        line=dict(width=3, color='#93C5FD')),
-            showlegend=False, hoverinfo='skip'))
-        fig.add_trace(go.Scatter3d(
-            x=[fx], y=[fy], z=[fz], mode='markers',
-            marker=dict(size=7, color='#DBEAFE', symbol='circle'),
-            showlegend=False, hoverinfo='skip'))
-        for ang in range(0, 360, 60):
-            r = (min(W/n_fans, D)*0.38)
-            ax = fx + r*math.cos(math.radians(ang))
-            ay = fy + r*math.sin(math.radians(ang))
-            ln3(fig, fx,fy,fz, ax,ay,fz, "#93C5FD", 2.0)
-
-    comp_r = min(W, D)*0.18
-    comp_x = cx + W*0.70
-    comp_y = cy + D*0.50
-    cylinder3(fig, comp_x, comp_y, z0+leg_h, z0+H*0.45, comp_r, "#1E3A5F", 14)
-    box3d(fig, comp_x-comp_r, comp_y-comp_r, z0+H*0.45,
-          comp_r*2, comp_r*2, 0.04, "#0F2744", "Kompressor silindr", 1.0, "#1E3A5F")
-
-    pipe_x_liq = cx + W*0.15
-    pipe_x_gas = cx + W*0.25
-    pipe_y = cy + D*0.90
-    ln3(fig, pipe_x_liq, pipe_y, z0, pipe_x_liq, pipe_y, z0-0.20, C["comp_pipe_liq"], 4.0)
-    ln3(fig, pipe_x_gas, pipe_y, z0, pipe_x_gas, pipe_y, z0-0.20, C["comp_pipe_gas"], 6.0)
-    tx3(fig, pipe_x_liq-0.08, pipe_y, z0+0.10, "HP", sz=7, color=C["comp_pipe_liq"])
-    tx3(fig, pipe_x_gas+0.08, pipe_y, z0+0.10, "LP", sz=7, color=C["comp_pipe_gas"])
-
-    tx3(fig, cx+W/2, cy+D/2, z0+H*0.30, brand, sz=9, color=C["comp_logo"])
-    tx3(fig, cx+W/2, cy+D/2, z0+H*0.18, "KOMPRESSOR", sz=7, color="#7CB9E8")
-
-    for vx in [cx+0.06, cx+W-0.06]:
-        for vy_off in [cy+0.06, cy+D-0.06]:
-            box3d(fig, vx-0.025, vy_off-0.025, cz-0.02, 0.05, 0.05, 0.04,
-                  "#374151", "Vibro damper", 1.0, "#1F2937")
-
-def draw_refrigerant_pipes(fig, room_x, room_y, room_L, room_W, room_H, T,
-                            comp_cx, comp_cy, comp_cz, facing):
-    pipe_wall_z = room_H * 0.85
-    if facing == "Old":
-        wx, wy = room_L/2, 0.0
-    elif facing == "Orqa":
-        wx, wy = room_L/2, room_W
-    elif facing == "Chap":
-        wx, wy = 0.0, room_W/2
-    else:
-        wx, wy = room_L, room_W/2
-
-    ln3(fig, wx,   wy,   pipe_wall_z,
-           comp_cx+0.15, comp_cy+0.45, comp_cz+0.10, C["comp_pipe_liq"], 3.5)
-    ln3(fig, wx+0.05, wy+0.05, pipe_wall_z,
-           comp_cx+0.25, comp_cy+0.45, comp_cz+0.10, C["comp_pipe_gas"], 5.0)
-
-    box3d(fig, wx-0.04, wy-0.04, pipe_wall_z-0.05,
-          0.08, 0.08, 0.12, "#6B7280", "Truba o'tkazgich", 1.0, "#374151")
-
-# EVAPORATOR (indoor unit)
-def draw_evaporator(fig, cx, cy, cL, cW, cH, label="", T=0.1):
-    eL = min(cL * 0.55, 1.40)
-    eW = 0.40; eH = 0.38
-    ex = cx + T + (cL - 2*T - eL) / 2
-    ey = cy + cW - T - eW - 0.04
-    ez = cH - eH - 0.08
-
-    box3d(fig, ex, ey, ez, eL, eW, eH, C["evap"], f"{label} Evaporator", 1.0, "#9CA3AF")
-    box3d(fig, ex+0.03, ey-0.025, ez+0.04, eL-0.06, 0.04, eH-0.08,
-          C["evap_fin"], "", 1.0, "#6B7280")
-    for fi in range(8):
-        fz = ez+0.06 + fi*(eH-0.12)/8
-        ln3(fig, ex+0.04, ey-0.025, fz, ex+eL-0.04, ey-0.025, fz, "#B0BEC5", 0.6)
-
-    n_evap_fans = max(1, int(eL / 0.45))
-    for fi in range(n_evap_fans):
-        fx = ex + eL/(n_evap_fans*2) + fi*(eL/n_evap_fans)
-        fy = ey - 0.03
-        fz_fan = ez + eH/2
-        fig.add_trace(go.Scatter3d(
-            x=[fx], y=[fy], z=[fz_fan], mode='markers',
-            marker=dict(size=14, color='#1F2937', symbol='circle',
-                        line=dict(width=2, color='#4B5563')),
-            showlegend=False, hoverinfo='skip'))
-        for ang in range(0, 360, 90):
-            r = 0.08
-            ax = fx + r*math.cos(math.radians(ang))
-            az = fz_fan + r*math.sin(math.radians(ang))
-            ln3(fig, fx, fy, fz_fan, ax, fy, az, "#6B7280", 1.5)
-
-    box3d(fig, ex, ey, ez-0.05, eL, eW, 0.04, "#9CA3AF", "Qoplama", 1.0, "#6B7280")
-    drain_x = ex + eL*0.15
-    ln3(fig, drain_x, ey+eW*0.5, ez-0.05, drain_x, ey+eW*0.5, ez-0.25, "#94A3B8", 2.0)
-
-    liq_pipe_x = ex - 0.04
-    gas_pipe_x = ex - 0.04
-    ln3(fig, liq_pipe_x, ey+eW*0.3, ez+0.06,
-           liq_pipe_x, ey+eW*0.3, ez-0.12, C["comp_pipe_liq"], 3.5)
-    ln3(fig, liq_pipe_x+0.06, ey+eW*0.3, ez+0.06,
-           liq_pipe_x+0.06, ey+eW*0.3, ez-0.12, C["comp_pipe_gas"], 5.0)
-
-# FLOOR & UTILITY
-def seams_front(fig,x0,x1,yf,z0,z1,std,c):
-    cx=x0+std
-    while cx<x1-0.01: ln3(fig,cx,yf,z0,cx,yf,z1,c,0.8); cx+=std
-
-def seams_side(fig,y0,y1,xf,z0,z1,std,c):
-    cy=y0+std
-    while cy<y1-0.01: ln3(fig,xf,cy,z0,xf,cy,z1,c,0.8); cy+=std
-
-def floor_grid(fig,L,W,z=0):
-    for xi in range(0,int(math.ceil(L))+1):
-        cc=C["gM"] if xi%2==0 else C["gm"]
-        ln3(fig,xi,0,z,xi,W,z,cc,0.7)
-    for yi in range(0,int(math.ceil(W))+1):
-        cc=C["gM"] if yi%2==0 else C["gm"]
-        ln3(fig,0,yi,z,L,yi,z,cc,0.7)
-
-def dim_arr(fig,p1,p2,offset,label):
-    ox,oy,oz=offset; x1,y1,z1=p1; x2,y2,z2=p2
-    fig.add_trace(go.Scatter3d(
-        x=[x1,x1+ox,None,x2,x2+ox],y=[y1,y1+oy,None,y2,y2+oy],z=[z1,z1+oz,None,z2,z2+oz],
-        mode="lines",line=dict(color=C["dim"],width=1.0,dash="dot"),hoverinfo="skip",showlegend=False))
-    ln3(fig,x1+ox,y1+oy,z1+oz,x2+ox,y2+oy,z2+oz,C["dim"],2.2)
-    tx3(fig,(x1+x2)/2+ox,(y1+y2)/2+oy,(z1+z2)/2+oz,label,sz=11,color=C["dim"])
 
 def build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep, agregat, aj, ag_brand,
-                    progress=100, show_lbl=True):
+                    progress=100, show_lbl=True, evj=None):
     """
     Three.js (WebGL) asosidagi yagona kamerali 3D vizualizatsiya.
     BO'LINGAN KAMERALARNI HAM QO'LLAB-QUVVATLAYDI!
@@ -1469,33 +1026,42 @@ def build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep, agregat, aj, ag_br
     
     # ===== ESHIK O'LCHAMLARI =====
     def get_door_dims(eshik_turi_local):
-        if eshik_turi_local == "Custom":
-            try:
-                dwmm = st.session_state.get("eshik_custom_width", 900)
-                dhmm = st.session_state.get("eshik_custom_height", 1900)
-            except:
-                dwmm, dhmm = 900, 1900
-        else:
-            try:
-                dwmm, dhmm = door_dim(eshik_turi_local)
-            except:
-                dwmm, dhmm = 900, 1900
+        try:
+            dwmm, dhmm = door_dim(eshik_turi_local)
+            if not dwmm or not dhmm:
+                dwmm, dhmm = 1000, 2000
+        except Exception:
+            dwmm, dhmm = 1000, 2000
         return dwmm, dhmm
     
     # ===== ESHIK JOYLASHUVI (5 VARIANT) =====
     def get_door_position(door_side, door_pos, width, total_length):
+        # MUHIM: qaytariladigan qiymat eshikning CHEKKASI emas, MARKAZI
+        # (doorGroup.position markazga qo'yiladi, ikkala qanot undan
+        # simmetrik joylashadi - pastdagi createDoor() funksiyasiga qarang).
+        # Shuning uchun markaz har doim [width/2, total_length-width/2]
+        # oralig'ida bo'lishi kerak, aks holda eshikning yarmi devordan
+        # tashqariga chiqib qoladi (aynan shu bug bo'lgan edi).
+        half = width / 2
+        lo, hi = half, total_length - half
+        if lo > hi:
+            # Devor eshikdan ham tor - iloji boricha markazga qo'yamiz
+            lo = hi = total_length / 2
+
         if door_pos == "Chap tomon burchak o'rniga":
-            return 0.0
+            raw = half
         elif door_pos == "Biroz chapga":
-            return 0.3
+            raw = half + 0.3
         elif door_pos == "O'rta":
-            return (total_length - width) / 2
+            raw = total_length / 2
         elif door_pos == "Biroz o'ngga":
-            return total_length - width - 0.3
+            raw = total_length - half - 0.3
         elif door_pos == "O'ng tomon burchak o'rniga":
-            return total_length - width
+            raw = total_length - half
         else:
-            return (total_length - width) / 2
+            raw = total_length / 2
+
+        return max(lo, min(raw, hi))
     
     # ===== KAMERALARNI HISOBLASH =====
     chambers = []
@@ -1571,11 +1137,17 @@ def build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep, agregat, aj, ag_br
                 dw_i, dh_i = 0, 0
                 has_door_i = False
             
+            # E'tibor: bu yerda kamera o'zining "W" o'lchami each_W (chamber
+            # W qatori), "L" o'lchami esa to'liq L bo'ladi - shuning uchun
+            # Chap/O'ng devor uzunligi each_W, Old/Orqa devor uzunligi L
+            # bo'lishi kerak (yagona kamera va "Uzunlik bo'yicha" bo'linishdagi
+            # bir xil qoidaga mos: Chap/O'ng -> kameraning W'si, Old/Orqa ->
+            # kameraning L'si).
             if k_joyi in ["Chap", "O'ng"]:
-                door_offset = get_door_position(k_joyi, k_pozitsiya, dw_i, L)
-            else:
                 door_offset = get_door_position(k_joyi, k_pozitsiya, dw_i, each_W)
-            
+            else:
+                door_offset = get_door_position(k_joyi, k_pozitsiya, dw_i, L)
+
             chamber = {
                 "id": i + 1,
                 "x": T,
@@ -1676,24 +1248,30 @@ def build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep, agregat, aj, ag_br
         comp_y = H + T + 0.05
         comp_rotation = 0
     
-    # ===== EVAPORATOR POZITSIYASI =====
+    # ===== EVAPORATOR (ICHKI BLOK) POZITSIYASI =====
+    # Eshik joyidan (ej) MUSTAQIL - foydalanuvchi "Ichki blok joyi" orqali
+    # alohida tanlaydi (evj). Agar berilmasa (eski chaqiruvlar bilan moslik
+    # uchun), avvalgidek eshikka qarama-qarshi devorga qo'yiladi.
+    evj_effective = evj if evj else ("Orqa" if ej == "Old" else "Old" if ej == "Orqa" else "O'ng" if ej == "Chap" else "Chap" if ej == "O'ng" else "Orqa")
+
     evap_x = L / 2
     evap_z = 0.35
     evap_y = H - 0.45
-    
-    if ej == "Old":
+
+    if evj_effective == "Old":
         evap_z = W - 0.35
-    elif ej == "Orqa":
+    elif evj_effective == "Orqa":
         evap_z = 0.35
-    elif ej == "Chap":
+    elif evj_effective == "Chap":
         evap_x = L - 0.5
         evap_z = W / 2
-    elif ej == "O'ng":
+    elif evj_effective == "O'ng":
         evap_x = 0.5
         evap_z = W / 2
     
     # ===== JSON GA AYLANTIRISH =====
     chambers_json = json.dumps(chambers)
+    door_catalog_json = json.dumps(DOOR_CATALOG)
     has_bolish_str = str(has_bolish).lower()
     has_comp_str = str(has_comp).lower()
     T_val = T
@@ -1707,7 +1285,7 @@ def build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep, agregat, aj, ag_br
             body {{ margin: 0; overflow: hidden; font-family: 'Segoe UI', 'Arial', sans-serif; background-color: #f0f4f8; }}
             #info {{ 
                 position: absolute; top: 12px; left: 12px; 
-                background: rgba(255,255,255,0.96); color: #0f172a; 
+                background: rgba(255,255,255,0.96); color: #2F4A28; 
                 padding: 10px 16px; border-radius: 10px; 
                 pointer-events: none; z-index: 100; font-size: 11px; 
                 backdrop-filter: blur(12px); border-left: 3px solid #0284c7; 
@@ -1736,7 +1314,7 @@ def build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep, agregat, aj, ag_br
                 background: rgba(255, 255, 255, 0.96); padding: 4px 12px; 
                 border-radius: 20px; border-left: 2px solid #0284c7; 
                 font-size: 10px; font-weight: 600; white-space: nowrap; 
-                font-family: 'Segoe UI', monospace; color: #0f172a; 
+                font-family: 'Segoe UI', monospace; color: #2F4A28; 
                 backdrop-filter: blur(6px); box-shadow: 0 2px 6px rgba(0,0,0,0.06);
                 pointer-events: none;
             }}
@@ -1880,7 +1458,57 @@ def build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep, agregat, aj, ag_br
             roof.position.set({L/2}, wallHeight + 0.05, {W/2});
             roof.castShadow = true;
             scene.add(roof);
-            
+
+            // ========== PANEL CHOKLARI (texnik chizmadagi kabi, panelW oralig'ida) ==========
+            const seamMaterial = new THREE.LineBasicMaterial({{ color: 0x4b5563, transparent: true, opacity: 0.55 }});
+
+            function addSeamsAlong(x1, z1, x2, z2, hFrom, hTo, nx, nz) {{
+                const len = Math.hypot(x2 - x1, z2 - z1);
+                const dx = (x2 - x1) / len, dz = (z2 - z1) / len;
+                const pts = [];
+                let d = panelW;
+                while (d < len - 0.02) {{
+                    const px = x1 + dx * d + nx;
+                    const pz = z1 + dz * d + nz;
+                    pts.push(px, hFrom, pz, px, hTo, pz);
+                    d += panelW;
+                }}
+                if (pts.length > 0) {{
+                    const geo = new THREE.BufferGeometry();
+                    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+                    scene.add(new THREE.LineSegments(geo, seamMaterial));
+                }}
+            }}
+
+            function addGridSeams(y, xLen, zLen, ox, oz) {{
+                const pts = [];
+                let d = panelW;
+                while (d < xLen - 0.02) {{
+                    pts.push(ox + d, y, oz, ox + d, y, oz + zLen);
+                    d += panelW;
+                }}
+                d = panelW;
+                while (d < zLen - 0.02) {{
+                    pts.push(ox, y, oz + d, ox + xLen, y, oz + d);
+                    d += panelW;
+                }}
+                if (pts.length > 0) {{
+                    const geo = new THREE.BufferGeometry();
+                    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+                    scene.add(new THREE.LineSegments(geo, seamMaterial));
+                }}
+            }}
+
+            // Old/Orqa devorlar (X o'qi bo'ylab) - tashqi yuzasida
+            addSeamsAlong(0, -wallThick, {L}, -wallThick, 0.01, wallHeight - 0.01, 0, -0.005);
+            addSeamsAlong(0, {W} + wallThick, {L}, {W} + wallThick, 0.01, wallHeight - 0.01, 0, 0.005);
+            // Chap/O'ng devorlar (Z o'qi bo'ylab) - tashqi yuzasida
+            addSeamsAlong(-wallThick, 0, -wallThick, {W}, 0.01, wallHeight - 0.01, -0.005, 0);
+            addSeamsAlong({L} + wallThick, 0, {L} + wallThick, {W}, 0.01, wallHeight - 0.01, 0.005, 0);
+            // Pol va Tom panellari (grid)
+            addGridSeams(0.002, {L}, {W}, 0, 0);
+            addGridSeams(wallHeight - 0.002, {L}, {W}, 0, 0);
+
             // ========== ICHKI DEVORLAR ==========
             const hasBolish = {has_bolish_str};
             const chambersData = {chambers_json};
@@ -1923,16 +1551,17 @@ def build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep, agregat, aj, ag_br
                 }}
             }}
             
-            // ========== ESHIKLAR (O'Z KAMERASIGA TEGISHLI) ==========
-            const doorMaterial = new THREE.MeshStandardMaterial({{ color: 0x475569, metalness: 0.25, roughness: 0.55 }});
+            // ========== ESHIKLAR (F1-F9 KATALOGI ASOSIDA, O'Z KAMERASIGA TEGISHLI) ==========
+            const DOOR_CATALOG = {door_catalog_json};
             const frameMaterial = new THREE.MeshStandardMaterial({{ color: 0x94a3b8, metalness: 0.65, roughness: 0.28 }});
             const handleMaterial = new THREE.MeshStandardMaterial({{ color: 0xf1f5f9, metalness: 0.85, roughness: 0.15 }});
             const glassMaterial = new THREE.MeshStandardMaterial({{ color: 0x7dd3fc, metalness: 0.1, roughness: 0.2, transparent: true, opacity: 0.35 }});
             const rubberSeal = new THREE.MeshStandardMaterial({{ color: 0x1e293b, metalness: 0.02, roughness: 0.9 }});
-            
+            const hingeMat = new THREE.MeshStandardMaterial({{ color: 0x64748b, metalness: 0.7, roughness: 0.25 }});
+
             function createDoor(chamber) {{
                 if (!chamber.has_door) return;
-                
+
                 const doorW = chamber.door_w;
                 const doorH = chamber.door_h;
                 const doorSide = chamber.door_side;
@@ -1943,119 +1572,157 @@ def build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep, agregat, aj, ag_br
                 const chW = chamber.ch_W;      // Kamera tashqi kenglik
                 const chId = chamber.id;
                 const T_local = T2;
-                
+                const spec = DOOR_CATALOG[chamber.eshik_turi] || DOOR_CATALOG["F1"];
+                const isSliding = spec.mechanism === "sliding";
+                const leaves = spec.leaves || 1;
+                const leafW = doorW / leaves;
+
                 let doorPosX = 0, doorPosZ = 0, doorRot = 0;
-                let doorOffsetX = 0, doorOffsetZ = 0;
-                
+
                 // Eshik joylashuvini aniqlash - KAMERA ICHIDA
                 if (doorSide === "Old") {{
-                    // Old devor (Z = chY) - X o'qi bo'ylab
                     doorPosX = chX + T_local + doorOffset;
                     doorPosZ = chY - 0.025;
                     doorRot = 0;
                 }} else if (doorSide === "Orqa") {{
-                    // Orqa devor (Z = chY + chW) - X o'qi bo'ylab
                     doorPosX = chX + T_local + doorOffset;
                     doorPosZ = chY + chW + 0.025;
                     doorRot = Math.PI;
                 }} else if (doorSide === "Chap") {{
-                    // Chap devor (X = chX) - Z o'qi bo'ylab
                     doorPosX = chX - 0.025;
                     doorPosZ = chY + T_local + doorOffset;
                     doorRot = -Math.PI/2;
                 }} else if (doorSide === "O'ng") {{
-                    // O'ng devor (X = chX + chL) - Z o'qi bo'ylab
                     doorPosX = chX + chL + 0.025;
                     doorPosZ = chY + T_local + doorOffset;
                     doorRot = Math.PI/2;
                 }} else {{
                     return;
                 }}
-                
+
                 const doorGroup = new THREE.Group();
                 doorGroup.position.set(doorPosX, doorH/2, doorPosZ);
                 doorGroup.rotation.y = doorRot;
-                
-                const doorHalfWidth = doorW / 2;
-                
-                // Ikkala qanot
-                const leftWing = new THREE.Mesh(new THREE.BoxGeometry(doorHalfWidth - 0.015, doorH, 0.055), doorMaterial);
-                leftWing.position.set(-doorHalfWidth/2 - 0.01, 0, 0);
-                leftWing.castShadow = true;
-                doorGroup.add(leftWing);
-                
-                const rightWing = new THREE.Mesh(new THREE.BoxGeometry(doorHalfWidth - 0.015, doorH, 0.055), doorMaterial);
-                rightWing.position.set(doorHalfWidth/2 + 0.01, 0, 0);
-                rightWing.castShadow = true;
-                doorGroup.add(rightWing);
-                
-                // Oynalar
-                const windowW = doorHalfWidth * 0.6;
-                const windowH = doorH * 0.35;
-                const windowOffset = 0.032;
-                
-                const leftWindow = new THREE.Mesh(new THREE.BoxGeometry(windowW, windowH, 0.008), glassMaterial);
-                leftWindow.position.set(-doorHalfWidth/2 - 0.01, doorH * 0.2, windowOffset);
-                doorGroup.add(leftWindow);
-                
-                const rightWindow = new THREE.Mesh(new THREE.BoxGeometry(windowW, windowH, 0.008), glassMaterial);
-                rightWindow.position.set(doorHalfWidth/2 + 0.01, doorH * 0.2, windowOffset);
-                doorGroup.add(rightWindow);
-                
-                // Ramka
-                const frameWidth = 0.045;
-                const topFrame = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.09, frameWidth, 0.07), frameMaterial);
-                topFrame.position.set(0, doorH/2 - 0.025, 0);
-                doorGroup.add(topFrame);
-                
-                const bottomFrame = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.09, frameWidth, 0.07), frameMaterial);
-                bottomFrame.position.set(0, -doorH/2 + 0.025, 0);
-                doorGroup.add(bottomFrame);
-                
-                const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(frameWidth, doorH + 0.07, 0.07), frameMaterial);
-                leftFrame.position.set(-doorW/2 - 0.022, 0, 0);
-                doorGroup.add(leftFrame);
-                
-                const rightFrame = new THREE.Mesh(new THREE.BoxGeometry(frameWidth, doorH + 0.07, 0.07), frameMaterial);
-                rightFrame.position.set(doorW/2 + 0.022, 0, 0);
-                doorGroup.add(rightFrame);
-                
-                const centerSeal = new THREE.Mesh(new THREE.BoxGeometry(0.02, doorH + 0.06, 0.08), rubberSeal);
-                centerSeal.position.set(0, 0, 0);
-                doorGroup.add(centerSeal);
-                
-                // Tutqichlar
-                const leftHandle = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.14, 0.035), handleMaterial);
-                leftHandle.position.set(-doorHalfWidth/2 - 0.01 + 0.22, 0.1, 0.04);
-                doorGroup.add(leftHandle);
-                
-                const rightHandle = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.14, 0.035), handleMaterial);
-                rightHandle.position.set(doorHalfWidth/2 + 0.01 - 0.22, 0.1, 0.04);
-                doorGroup.add(rightHandle);
-                
-                // Menteshkalar
-                const hingeMat = new THREE.MeshStandardMaterial({{ color: 0x64748b, metalness: 0.7, roughness: 0.25 }});
-                const hingePositions = [-0.22, 0.0, 0.22];
-                hingePositions.forEach(yPos => {{
-                    const leftHinge = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.025, 0.04), hingeMat);
-                    leftHinge.position.set(-doorW/2 + 0.015, yPos, 0.025);
-                    doorGroup.add(leftHinge);
-                    
-                    const rightHinge = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.025, 0.04), hingeMat);
-                    rightHinge.position.set(doorW/2 - 0.015, yPos, 0.025);
-                    doorGroup.add(rightHinge);
-                }});
-                
+
+                const panelMat = new THREE.MeshStandardMaterial({{ color: spec.color, metalness: 0.12, roughness: 0.62 }});
+
+                // ---- Har bir tabaqa (1 yoki 2, F6/F9 kabi ikki tabaqalilar uchun) ----
+                for (let li = 0; li < leaves; li++) {{
+                    const leafCenterX = -doorW/2 + leafW * (li + 0.5);
+                    const leafGroup = new THREE.Group();
+                    leafGroup.position.set(leafCenterX, 0, 0);
+                    doorGroup.add(leafGroup);
+
+                    const panel = new THREE.Mesh(new THREE.BoxGeometry(leafW - 0.02, doorH, 0.055), panelMat);
+                    panel.castShadow = true;
+                    leafGroup.add(panel);
+
+                    // Oyna: F1/F4 - dumaloq, F6/F7 - oval, qolganlari - oynasiz
+                    if (spec.window === "round") {{
+                        const r = Math.min(leafW, doorH) * 0.16;
+                        const win = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.01, 32), glassMaterial);
+                        win.rotation.x = Math.PI / 2;
+                        win.position.set(0, doorH * 0.18, 0.032);
+                        leafGroup.add(win);
+                        const winFrame = new THREE.Mesh(new THREE.TorusGeometry(r, 0.012, 8, 32), frameMaterial);
+                        winFrame.position.set(0, doorH * 0.18, 0.033);
+                        leafGroup.add(winFrame);
+                    }} else if (spec.window === "oval") {{
+                        const rOval = leafW * 0.22;
+                        const win = new THREE.Mesh(new THREE.CylinderGeometry(rOval, rOval, 0.01, 32), glassMaterial);
+                        win.rotation.x = Math.PI / 2;
+                        win.scale.set(1, 1.5, 1);
+                        win.position.set(0, doorH * 0.12, 0.032);
+                        leafGroup.add(win);
+                        const winFrame = new THREE.Mesh(new THREE.TorusGeometry(rOval, 0.014, 8, 32), frameMaterial);
+                        winFrame.scale.set(1, 1.5, 1);
+                        winFrame.position.set(0, doorH * 0.12, 0.033);
+                        leafGroup.add(winFrame);
+                    }}
+
+                    // Dastak/qulf turi: lever, bar, chain yoki bumper (PVC otboynik)
+                    const outerSide = (leaves === 1) ? 1 : (li === leaves - 1 ? 1 : -1);
+                    if (spec.handle === "lever" && !isSliding) {{
+                        const h = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.16, 0.035), handleMaterial);
+                        h.position.set(outerSide * (leafW / 2 - 0.12), 0.05, 0.045);
+                        leafGroup.add(h);
+                    }} else if (spec.handle === "bar") {{
+                        const bar = new THREE.Mesh(new THREE.BoxGeometry(leafW * 0.7, 0.05, 0.045), handleMaterial);
+                        bar.position.set(0, -0.05, 0.045);
+                        bar.rotation.z = 0.06;
+                        leafGroup.add(bar);
+                    }} else if (spec.handle === "chain") {{
+                        const lockMat = new THREE.MeshStandardMaterial({{ color: 0x111827, metalness: 0.8, roughness: 0.3 }});
+                        const lock = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.05, 12), lockMat);
+                        lock.rotation.z = Math.PI / 2;
+                        lock.position.set(outerSide * (leafW / 2 - 0.1), -0.1, 0.045);
+                        leafGroup.add(lock);
+                    }}
+                    if (spec.handle === "bumper") {{
+                        // Mayatnik eshiklarning (F6/F7) egilgan PVC otboyniki
+                        const bumper = new THREE.Mesh(new THREE.BoxGeometry(leafW * 0.75, 0.09, 0.03), rubberSeal);
+                        bumper.position.set(0, -doorH * 0.28, 0.04);
+                        leafGroup.add(bumper);
+                    }}
+
+                    // Menteshkalar - faqat osma/mayatnik eshiklarda (surilmada rels bor, petli yo'q)
+                    if (!isSliding && spec.hinges > 0) {{
+                        const hingeSide = (leaves === 1) ? -1 : (li === 0 ? -1 : 1);
+                        const hingeX = hingeSide * (leafW / 2 - 0.02);
+                        for (let hi = 0; hi < spec.hinges; hi++) {{
+                            const t = spec.hinges === 1 ? 0 : (hi / (spec.hinges - 1) - 0.5) * (doorH * 0.7);
+                            const hinge = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.045), hingeMat);
+                            hinge.position.set(hingeX, t, 0.028);
+                            leafGroup.add(hinge);
+                        }}
+                    }}
+                }}
+
+                // ---- Rama: surilma eshiklarda rels+g'ildirak, qolganlarida oddiy rama ----
+                if (isSliding) {{
+                    const rail = new THREE.Mesh(new THREE.BoxGeometry(doorW * 1.3, 0.06, 0.09), frameMaterial);
+                    rail.position.set(doorW * 0.15, doorH / 2 + 0.06, 0.05);
+                    doorGroup.add(rail);
+                    [-doorW * 0.35, doorW * 0.05, doorW * 0.45].forEach(rx => {{
+                        const roller = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.05, 10), hingeMat);
+                        roller.rotation.z = Math.PI / 2;
+                        roller.position.set(rx, doorH / 2 + 0.02, 0.05);
+                        doorGroup.add(roller);
+                    }});
+                }} else {{
+                    const frameWidth = 0.045;
+                    const topFrame = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.09, frameWidth, 0.07), frameMaterial);
+                    topFrame.position.set(0, doorH/2 - 0.025, 0);
+                    doorGroup.add(topFrame);
+
+                    const bottomFrame = new THREE.Mesh(new THREE.BoxGeometry(doorW + 0.09, frameWidth, 0.07), frameMaterial);
+                    bottomFrame.position.set(0, -doorH/2 + 0.025, 0);
+                    doorGroup.add(bottomFrame);
+
+                    const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(frameWidth, doorH + 0.07, 0.07), frameMaterial);
+                    leftFrame.position.set(-doorW/2 - 0.022, 0, 0);
+                    doorGroup.add(leftFrame);
+
+                    const rightFrame = new THREE.Mesh(new THREE.BoxGeometry(frameWidth, doorH + 0.07, 0.07), frameMaterial);
+                    rightFrame.position.set(doorW/2 + 0.022, 0, 0);
+                    doorGroup.add(rightFrame);
+                }}
+
+                if (leaves === 2) {{
+                    const centerSeal = new THREE.Mesh(new THREE.BoxGeometry(0.02, doorH + 0.06, 0.08), rubberSeal);
+                    doorGroup.add(centerSeal);
+                }}
+
                 // Eshik yorlig'i
                 const doorLabelDiv = document.createElement('div');
-                doorLabelDiv.textContent = '🚪 K' + chId;
+                doorLabelDiv.textContent = '🚪 ' + chamber.eshik_turi + ' (K' + chId + ')';
                 doorLabelDiv.className = 'label';
                 doorLabelDiv.style.fontSize = '9px';
                 doorLabelDiv.style.padding = '2px 8px';
                 const doorLabel = new CSS2DObject(doorLabelDiv);
                 doorLabel.position.set(0, doorH/2 + 0.2, 0.04);
                 doorGroup.add(doorLabel);
-                
+
                 scene.add(doorGroup);
             }}
             
@@ -2246,16 +1913,16 @@ def build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep, agregat, aj, ag_br
                 const evapX = {evap_x};
                 const evapY = {evap_y};
                 const evapZ = {evap_z};
-                const doorSide = "{ej}";
+                const evapSide = "{evj_effective}";
                 
                 const evapGroup = new THREE.Group();
                 evapGroup.position.set(evapX, evapY, evapZ);
                 
                 let evapRotY = 0;
-                if (doorSide === "Old") evapRotY = Math.PI;
-                else if (doorSide === "Orqa") evapRotY = 0;
-                else if (doorSide === "Chap") evapRotY = -Math.PI/2;
-                else if (doorSide === "O'ng") evapRotY = Math.PI/2;
+                if (evapSide === "Old") evapRotY = Math.PI;
+                else if (evapSide === "Orqa") evapRotY = 0;
+                else if (evapSide === "Chap") evapRotY = -Math.PI/2;
+                else if (evapSide === "O'ng") evapRotY = Math.PI/2;
                 evapGroup.rotation.y = evapRotY;
                 
                 const silverMat = new THREE.MeshStandardMaterial({{ color: 0xe2e8f0, metalness: 0.68, roughness: 0.18 }});
@@ -2304,10 +1971,10 @@ def build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep, agregat, aj, ag_br
                 const particlePositions = [];
                 particleVelocities = [];
                 
-                if (doorSide === "Old") airDirection = {{ x: 0, z: -1 }};
-                else if (doorSide === "Orqa") airDirection = {{ x: 0, z: 1 }};
-                else if (doorSide === "Chap") airDirection = {{ x: 1, z: 0 }};
-                else if (doorSide === "O'ng") airDirection = {{ x: -1, z: 0 }};
+                if (evapSide === "Old") airDirection = {{ x: 0, z: -1 }};
+                else if (evapSide === "Orqa") airDirection = {{ x: 0, z: 1 }};
+                else if (evapSide === "Chap") airDirection = {{ x: 1, z: 0 }};
+                else if (evapSide === "O'ng") airDirection = {{ x: -1, z: 0 }};
                 
                 const particleGeo = new THREE.BufferGeometry();
                 for (let i = 0; i < particleCount; i++) {{
@@ -2408,7 +2075,7 @@ def build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep, agregat, aj, ag_br
 def build_3d_multi_html(L, W, heights_list, corridor_pos, corridor_w, wall_mm,
                         door_w=0.96, door_h=2.1, n_total_arg=None,
                         comp_brand="Bitzer", comp_type="Split-sistema (Nizkotemp)",
-                        comp_joyi="Orqa", door_side_multi="Old"):
+                        comp_joyi="Orqa", door_side_multi="Old", eshik_turi="F1"):
     """
     EcoProm Multi-Chamber Cold Room 3D Visualization.
     - Tom va uning ikki yonboshidagi uchburchak devorlar (Gable Walls) qovurg'ali profildan shakllantirildi.
@@ -2482,7 +2149,8 @@ def build_3d_multi_html(L, W, heights_list, corridor_pos, corridor_w, wall_mm,
 
     max_h = max(heights_list)
     chambers_json = json.dumps(chambers_data)
-    panel_w = 0.96  
+    door_catalog_json_multi = json.dumps(DOOR_CATALOG)
+    panel_w = 0.96
 
     cam_x = L * 1.6
     cam_y = max_h * 2.5
@@ -2499,7 +2167,7 @@ def build_3d_multi_html(L, W, heights_list, corridor_pos, corridor_w, wall_mm,
         body {{ margin: 0; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; background-color: #f8fafc; }}
         #info {{ 
             position: absolute; top: 16px; left: 16px; 
-            background: rgba(255, 255, 255, 0.98); color: #0f172a; 
+            background: rgba(255, 255, 255, 0.98); color: #2F4A28; 
             padding: 12px 20px; border-radius: 12px; font-size: 11px; 
             border: 1px solid rgba(0, 90, 54, 0.25);
             border-left: 4px solid #005a36;
@@ -2517,7 +2185,7 @@ def build_3d_multi_html(L, W, heights_list, corridor_pos, corridor_w, wall_mm,
             background: #ffffff; padding: 4px 10px; 
             border-radius: 6px; border: 1px solid #cbd5e1; border-left: 3px solid #005a36; 
             font-size: 10px; font-weight: 600; white-space: nowrap; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05); color: #0f172a; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); color: #2F4A28; 
             font-family: monospace;
         }}
         .door-label {{
@@ -2597,8 +2265,13 @@ def build_3d_multi_html(L, W, heights_list, corridor_pos, corridor_w, wall_mm,
         const wallMat = new THREE.MeshStandardMaterial({{ color: 0xffffff, metalness: 0.1, roughness: 0.5, transparent: true, opacity: 0.5, side: THREE.DoubleSide }});
         const roofMetalMat = new THREE.MeshStandardMaterial({{ color: 0x7e8a9b, metalness: 0.5, roughness: 0.3, side: THREE.DoubleSide }});
         const gableMetalMat = new THREE.MeshStandardMaterial({{ color: 0x94a3b8, metalness: 0.4, roughness: 0.35, side: THREE.DoubleSide }});
-        const doorMat = new THREE.MeshStandardMaterial({{ color: 0x1e293b, metalness: 0.3, roughness: 0.4 }});
         const gutterMat = new THREE.MeshStandardMaterial({{ color: 0x334155, metalness: 0.6, roughness: 0.3 }});
+        const DOOR_CATALOG_M = {door_catalog_json_multi};
+        const DOOR_TYPE_M = "{eshik_turi}";
+        const doorGlassMat = new THREE.MeshStandardMaterial({{ color: 0x7dd3fc, metalness: 0.1, roughness: 0.2, transparent: true, opacity: 0.35 }});
+        const doorHandleMat = new THREE.MeshStandardMaterial({{ color: 0xf1f5f9, metalness: 0.85, roughness: 0.15 }});
+        const doorHingeMat = new THREE.MeshStandardMaterial({{ color: 0x64748b, metalness: 0.7, roughness: 0.25 }});
+        const doorRubberMat = new THREE.MeshStandardMaterial({{ color: 0x1e293b, metalness: 0.02, roughness: 0.9 }});
         const floorMat = new THREE.MeshStandardMaterial({{ color: 0xe2e8f0, roughness: 0.6, metalness: 0.1 }});
         const pipeRedMat = new THREE.MeshStandardMaterial({{ color: 0xdc2626, metalness: 0.6, roughness: 0.2 }});
         const pipeBlueMat = new THREE.MeshStandardMaterial({{ color: 0x0284c7, metalness: 0.6, roughness: 0.2 }});
@@ -2722,29 +2395,95 @@ def build_3d_multi_html(L, W, heights_list, corridor_pos, corridor_w, wall_mm,
         }}
 
         function createRealisticDoor(x, z, width, height, rotationY, chamberId) {{
+            const spec = DOOR_CATALOG_M[DOOR_TYPE_M] || DOOR_CATALOG_M["F1"];
+            const isSliding = spec.mechanism === "sliding";
+            const leaves = spec.leaves || 1;
+            const leafW = width / leaves;
+            const panelMat = new THREE.MeshStandardMaterial({{ color: spec.color, metalness: 0.12, roughness: 0.62 }});
+
             const doorGroup = new THREE.Group();
             doorGroup.position.set(x, height/2, z);
             doorGroup.rotation.y = rotationY;
-            
-            const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(width, height, 0.06), doorMat);
-            doorGroup.add(doorPanel);
-            
-            const frameWidth = 0.04;
-            const topFrame = new THREE.Mesh(new THREE.BoxGeometry(width + 0.08, frameWidth, 0.07), gutterMat);
-            topFrame.position.set(0, height/2 - 0.02, 0);
-            doorGroup.add(topFrame);
-            
-            const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(frameWidth, height + 0.06, 0.07), gutterMat);
-            leftFrame.position.set(-width/2 - 0.02, 0, 0);
-            doorGroup.add(leftFrame);
+
+            for (let li = 0; li < leaves; li++) {{
+                const leafCenterX = -width/2 + leafW * (li + 0.5);
+                const leafGroup = new THREE.Group();
+                leafGroup.position.set(leafCenterX, 0, 0);
+                doorGroup.add(leafGroup);
+
+                const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(leafW - 0.02, height, 0.06), panelMat);
+                leafGroup.add(doorPanel);
+
+                if (spec.window === "round") {{
+                    const r = Math.min(leafW, height) * 0.16;
+                    const win = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.01, 32), doorGlassMat);
+                    win.rotation.x = Math.PI / 2;
+                    win.position.set(0, height * 0.18, 0.032);
+                    leafGroup.add(win);
+                }} else if (spec.window === "oval") {{
+                    const rOval = leafW * 0.22;
+                    const win = new THREE.Mesh(new THREE.CylinderGeometry(rOval, rOval, 0.01, 32), doorGlassMat);
+                    win.rotation.x = Math.PI / 2;
+                    win.scale.set(1, 1.5, 1);
+                    win.position.set(0, height * 0.12, 0.032);
+                    leafGroup.add(win);
+                }}
+
+                const outerSide = (leaves === 1) ? 1 : (li === leaves - 1 ? 1 : -1);
+                if (spec.handle === "lever" && !isSliding) {{
+                    const h = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.16, 0.035), doorHandleMat);
+                    h.position.set(outerSide * (leafW / 2 - 0.12), 0.05, 0.045);
+                    leafGroup.add(h);
+                }} else if (spec.handle === "bar") {{
+                    const bar = new THREE.Mesh(new THREE.BoxGeometry(leafW * 0.7, 0.05, 0.045), doorHandleMat);
+                    bar.position.set(0, -0.05, 0.045);
+                    bar.rotation.z = 0.06;
+                    leafGroup.add(bar);
+                }} else if (spec.handle === "bumper") {{
+                    const bumper = new THREE.Mesh(new THREE.BoxGeometry(leafW * 0.75, 0.09, 0.03), doorRubberMat);
+                    bumper.position.set(0, -height * 0.28, 0.04);
+                    leafGroup.add(bumper);
+                }}
+
+                if (!isSliding && spec.hinges > 0) {{
+                    const hingeSide = (leaves === 1) ? -1 : (li === 0 ? -1 : 1);
+                    const hingeX = hingeSide * (leafW / 2 - 0.02);
+                    for (let hi = 0; hi < spec.hinges; hi++) {{
+                        const t = spec.hinges === 1 ? 0 : (hi / (spec.hinges - 1) - 0.5) * (height * 0.7);
+                        const hinge = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.045), doorHingeMat);
+                        hinge.position.set(hingeX, t, 0.028);
+                        leafGroup.add(hinge);
+                    }}
+                }}
+            }}
+
+            if (isSliding) {{
+                const rail = new THREE.Mesh(new THREE.BoxGeometry(width * 1.3, 0.06, 0.09), gutterMat);
+                rail.position.set(width * 0.15, height / 2 + 0.06, 0.05);
+                doorGroup.add(rail);
+            }} else {{
+                const frameWidth = 0.04;
+                const topFrame = new THREE.Mesh(new THREE.BoxGeometry(width + 0.08, frameWidth, 0.07), gutterMat);
+                topFrame.position.set(0, height/2 - 0.02, 0);
+                doorGroup.add(topFrame);
+
+                const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(frameWidth, height + 0.06, 0.07), gutterMat);
+                leftFrame.position.set(-width/2 - 0.02, 0, 0);
+                doorGroup.add(leftFrame);
+            }}
+
+            if (leaves === 2) {{
+                const centerSeal = new THREE.Mesh(new THREE.BoxGeometry(0.02, height + 0.04, 0.07), doorRubberMat);
+                doorGroup.add(centerSeal);
+            }}
 
             const labelDiv = document.createElement('div');
-            labelDiv.textContent = '🚪 K' + chamberId;
+            labelDiv.textContent = '🚪 ' + DOOR_TYPE_M + ' (K' + chamberId + ')';
             labelDiv.className = 'door-label';
             const doorLabel = new CSS2DObject(labelDiv);
             doorLabel.position.set(0, height/2 + 0.1, 0.045);
             doorGroup.add(doorLabel);
-            
+
             scene.add(doorGroup);
         }}
 
@@ -3131,483 +2870,7 @@ def build_wall_segs(sz, chap_corner=True, ong_corner=True, has_door=False):
                 # Eshik yo'q: oxirgi panelga qo'shamiz
                 segs[-2] += diff
     
-    print(f"🔧 build_wall_segs: sz={sz}mm, chap={chap_corner}, ong={ong_corner}, has_door={has_door}")
-    print(f"  Natija: {segs} (sum={sum(segs)}mm)")
-    
     return segs
-
-
-def door_off(parts, pos, side="vertical", dsz=960):
-    """
-    Eshik ofsetini hisoblaydi - 5 VARIANT
-    """
-    if not parts:
-        return 0.0
-    
-    if dsz <= 0:
-        return 0.0
-    
-    print(f"🔍 door_off: parts={parts}, pos={pos}, side={side}, dsz={dsz}")
-    
-    # ===== 1. ASOSIY HISOBLAR =====
-    total_length = sum(parts)
-    print(f"  total_length={total_length}mm")
-    
-    # Burchak panellarini aniqlash
-    has_left_corner = parts[0] == 480 if parts else False
-    has_right_corner = parts[-1] == 480 if parts else False
-    
-    left_corner = parts[0] if has_left_corner else 0
-    right_corner = parts[-1] if has_right_corner else 0
-    
-    print(f"  has_left_corner={has_left_corner}, has_right_corner={has_right_corner}")
-    print(f"  left_corner={left_corner}mm, right_corner={right_corner}mm")
-    
-    # Burchaklarsiz asosiy panellar
-    main_parts = [p for p in parts if p != 480]
-    main_total = sum(main_parts) if main_parts else 0
-    
-    print(f"  main_parts={main_parts}")
-    print(f"  main_total={main_total}mm")
-    
-    # Eshik kengligi
-    door_w = min(dsz, main_total if main_total > 0 else dsz)
-    print(f"  door_w={door_w}mm")
-    
-    # ===== 2. POSITSIYAGA QARAB OFSET =====
-    if pos == "Chap tomon burchak o'rniga":
-        # Chap burchakda - chap burchak panelining oxiridan boshlab
-        result = float(left_corner)
-        print(f"  ✅ Natija (Chap burchak): {result}mm")
-        return result
-    
-    elif pos == "Biroz chapga":
-        # Chap burchakdan 300 mm keyin
-        result = float(left_corner + 300)
-        print(f"  ✅ Natija (Biroz chapga): {result}mm")
-        return result
-    
-    elif pos == "O'rta":
-        # ===== DEVR O'RTASIDA - BUTUN DEVOR BO'YICHA =====
-        # Eshikni devorning to'liq o'rtasiga joylashtiramiz
-        if total_length > door_w:
-            offset = (total_length - door_w) / 2
-        else:
-            offset = 0
-        
-        result = float(offset)
-        print(f"  ✅ Natija (O'rta - to'liq devor): {result}mm")
-        print(f"     total_length={total_length} - door_w={door_w} / 2 = {offset:.1f}")
-        return result
-    
-    elif pos == "Biroz o'ngga":
-        # O'ng burchakdan 300 mm oldin (asosiy panellar bo'yicha)
-        if main_total > door_w:
-            offset_in_main = main_total - door_w - 300
-        else:
-            offset_in_main = 0
-        
-        # Agar manfiy bo'lsa, o'ng burchakka yaqin joylashtiramiz
-        if offset_in_main < 0:
-            offset_in_main = 0
-        
-        result = float(left_corner + offset_in_main)
-        print(f"  ✅ Natija (Biroz o'ngga): {result}mm")
-        return result
-    
-    elif pos == "O'ng tomon burchak o'rniga":
-        # O'ng burchakda - o'ng burchak panelining boshidan
-        if main_total > door_w:
-            offset_in_main = main_total - door_w
-        else:
-            offset_in_main = 0
-        
-        result = float(left_corner + offset_in_main)
-        print(f"  ✅ Natija (O'ng burchak): {result}mm")
-        return result
-    
-    else:
-        # Default: o'rta (butun devor bo'yicha)
-        if total_length > door_w:
-            offset = (total_length - door_w) / 2
-        else:
-            offset = 0
-        
-        result = float(offset)
-        print(f"  ✅ Natija (default): {result}mm")
-        return result
-
-def make_svg(L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor, proj, code, ej, eshik, ep, eo):
-    """
-    Yagona kamera uchun chizma - 2-6 ta kameralarni qo'llab-quvvatlaydi
-    """
-    owmm = m_to_mm(L)
-    ohmm = m_to_mm(W)
-    ozmm = m_to_mm(H)
-    
-    # ========== ESHIK MA'LUMOTLARI ==========
-    eshik_turi = eshik
-    if eshik_turi == "Custom":
-        eshik_w = st.session_state.get("eshik_custom_width", 900)
-        eshik_h = st.session_state.get("eshik_custom_height", 1900)
-        eshik_soni = st.session_state.get("eshik_soni", 1)
-    else:
-        eshik_w, eshik_h = door_dim_custom(eshik_turi)
-        eshik_soni = 1
-    
-    # ========== KAMERA BO'LISH ==========
-    kamera_bolish_turi = st.session_state.get("kamera_bolish_turi", "Yo'q")
-    kameralar_soni = st.session_state.get("kameralar_soni", 2)
-    
-    # ========== KAMERALARNI HISOBLASH ==========
-    if kamera_bolish_turi == "Uzunlik bo'yicha":
-        each_L = L / kameralar_soni
-        chambers = []
-        for i in range(kameralar_soni):
-            chambers.append({
-                "id": i + 1,
-                "L": each_L,
-                "W": W,
-                "H": H,
-                "x": i * each_L,
-                "y": 0,
-                "w": each_L,
-                "h": W
-            })
-        eshiklar = []
-        if st.session_state.get("har_bir_kamera_eshik", False):
-            for i in range(kameralar_soni):
-                eshik_joyi = st.session_state.get(f"kamera_eshik_joyi_{i}", "Old")
-                eshik_pozitsiya = st.session_state.get(f"kamera_eshik_pozitsiya_{i}", "O'rta")
-                if eshik_turi != "Yo'q":
-                    eshiklar.append({
-                        "tur": eshik_turi,
-                        "width": eshik_w,
-                        "height": eshik_h,
-                        "soni": eshik_soni,
-                        "joyi": eshik_joyi,
-                        "pozitsiya": eshik_pozitsiya,
-                        "ochilish": "Ichkariga"
-                    })
-        else:
-            if eshik_turi != "Yo'q":
-                eshiklar.append({
-                    "tur": eshik_turi,
-                    "width": eshik_w,
-                    "height": eshik_h,
-                    "soni": eshik_soni,
-                    "joyi": ej,
-                    "pozitsiya": ep,
-                    "ochilish": eo
-                })
-    
-    elif kamera_bolish_turi == "Eni bo'yicha":
-        each_W = W / kameralar_soni
-        chambers = []
-        for i in range(kameralar_soni):
-            chambers.append({
-                "id": i + 1,
-                "L": L,
-                "W": each_W,
-                "H": H,
-                "x": 0,
-                "y": i * each_W,
-                "w": L,
-                "h": each_W
-            })
-        eshiklar = []
-        if st.session_state.get("har_bir_kamera_eshik", False):
-            for i in range(kameralar_soni):
-                eshik_joyi = st.session_state.get(f"kamera_eshik_joyi_{i}", "Old")
-                eshik_pozitsiya = st.session_state.get(f"kamera_eshik_pozitsiya_{i}", "O'rta")
-                if eshik_turi != "Yo'q":
-                    eshiklar.append({
-                        "tur": eshik_turi,
-                        "width": eshik_w,
-                        "height": eshik_h,
-                        "soni": eshik_soni,
-                        "joyi": eshik_joyi,
-                        "pozitsiya": eshik_pozitsiya,
-                        "ochilish": "Ichkariga"
-                    })
-        else:
-            if eshik_turi != "Yo'q":
-                eshiklar.append({
-                    "tur": eshik_turi,
-                    "width": eshik_w,
-                    "height": eshik_h,
-                    "soni": eshik_soni,
-                    "joyi": ej,
-                    "pozitsiya": ep,
-                    "ochilish": eo
-                })
-    
-    else:
-        chambers = [{"L": L, "W": W, "H": H, "id": 1, "x": 0, "y": 0, "w": L, "h": W}]
-        eshiklar = []
-        if eshik_turi != "Yo'q":
-            eshiklar.append({
-                "tur": eshik_turi,
-                "width": eshik_w,
-                "height": eshik_h,
-                "soni": eshik_soni,
-                "joyi": ej,
-                "pozitsiya": ep,
-                "ochilish": eo
-            })
-    
-    # ========== AGAR BO'LINGAN BO'LSA ==========
-    if kamera_bolish_turi != "Yo'q" and kameralar_soni > 1:
-        return make_svg_split_multi(
-            L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor,
-            proj, code, chambers, eshiklar,
-            kamera_bolish_turi, kameralar_soni
-        )
-    
-    # ========== YAGONA KAMERA ==========
-    ch = chambers[0]
-    Lc = ch["L"]
-    Wc = ch["W"]
-    Hc = ch["H"]
-    
-    owmm_c = m_to_mm(Lc)
-    ohmm_c = m_to_mm(Wc)
-    ozmm_c = m_to_mm(Hc)
-    
-    # ========== BURCHAK HOLATI ==========
-    corners = {
-        "chap_tepa": True,
-        "chap_past": True,
-        "ong_tepa": True,
-        "ong_past": True
-    }
-    
-    if eshik_turi != "Yo'q":
-        if ej == "Chap":
-            if ep == "Chap tomon burchak o'rniga":
-                corners["chap_tepa"] = False
-                corners["chap_past"] = False
-        elif ej == "O'ng":
-            if ep == "O'ng tomon burchak o'rniga":
-                corners["ong_tepa"] = False
-                corners["ong_past"] = False
-        elif ej == "Old":
-            if ep == "Chap tomon burchak o'rniga":
-                corners["chap_past"] = False
-            elif ep == "O'ng tomon burchak o'rniga":
-                corners["ong_past"] = False
-        elif ej == "Orqa":
-            if ep == "Chap tomon burchak o'rniga":
-                corners["chap_tepa"] = False
-            elif ep == "O'ng tomon burchak o'rniga":
-                corners["ong_tepa"] = False
-    
-    # Devor panellari
-    chap_burchak_bor = corners["chap_tepa"] and corners["chap_past"]
-    ong_burchak_bor = corners["ong_tepa"] and corners["ong_past"]
-    
-    tp = build_wall_segs(owmm_c, chap_burchak_bor, ong_burchak_bor)
-    rp = build_wall_segs(ohmm_c, chap_burchak_bor, ong_burchak_bor)
-    
-    # Eshik
-    has_door = (eshik_turi != "Yo'q")
-    dwmm = eshik_w if has_door else 0
-    dhmm = eshik_h if has_door else 0
-    
-    # ========== ESHIK OFSETINI HISOBLASH ==========
-    # doff ni oldindan hisoblaymiz va keyin ishlatamiz
-    doff = 0
-    if has_door:
-        if ej == "Chap" or ej == "O'ng":
-            doff = door_off(rp, ep, "vertical", dwmm)
-        elif ej == "Old" or ej == "Orqa":
-            doff = door_off(tp, ep, "horizontal", dwmm)
-    
-    tm = seg_meta(tp, has_door=(has_door and ej in ["Old", "Orqa"]), door_sz=dwmm)
-    rm = seg_meta(rp, has_door=(has_door and ej in ["Chap", "O'ng"]), door_sz=dwmm)
-    
-    # ========== PATALOK VA POL ==========
-    tpl_segs = build_segs(owmm_c)
-    rpl_segs = build_segs(ohmm_c)
-    
-    t_slab_meta = seg_meta(tpl_segs, has_door=False, door_sz=0)
-    r_slab_meta = seg_meta(rpl_segs, has_door=False, door_sz=0)
-    
-    tpl = [{"size": p, "type": "panel"} for p in tpl_segs]
-    rpl = [{"size": p, "type": "panel"} for p in rpl_segs]
-    
-    # ========== MASSHTAB ==========
-    scale = min(250 / max(owmm_c, 1), 185 / max(ohmm_c, 1))
-    dw = owmm_c * scale
-    dh = ohmm_c * scale
-    wt = max(5, wall_mm * scale)
-    SW, SH = 794, 1420
-    px = 390 - dw / 2
-    py = 115
-    my = py + dh + 92
-    by = my + dh + 82
-    tb = min(by + dh + 55, 978)
-    
-    # Ichki o'lchamlar
-    iL = max(0, owmm_c - 2 * wall_mm)
-    iW = max(0, ohmm_c - 2 * wall_mm)
-    iH = max(0, ozmm_c - ceil_mm - (floor_mm if pol_bor else 0))
-    
-    # ========== PANEL JADVALI ==========
-    panel_rows = build_panel_table_for_split(
-        owmm, ohmm, ozmm, wall_mm, ceil_mm, floor_mm, pol_bor,
-        chambers, eshiklar
-    )
-    
-    fixed_panel_rows = []
-    for row in panel_rows:
-        if "Potolok/Pol paneli" in row.get("Nomi", ""):
-            row["Soni"] = row["Soni"] * (len(tpl_segs) // 2 if len(tpl_segs) > 2 else 2)
-            row["Maydon m²"] = (row["Uzunlik"] / 1000) * (row["Eni"] / 1000) * row["Soni"]
-        fixed_panel_rows.append(row)
-
-    table_svg = make_ecofrom_table_svg(fixed_panel_rows, x=30, y=by + dh + 110, width=730)
-    
-    # ========== ESHIK CHIZISH (doff dan foydalanamiz) ==========
-    ds = ""
-    dn = ""
-    if has_door:
-        if ej == "Chap":
-            ds = arc_left(px, py, scale, doff, dhmm, dwmm, eo)
-            dn = svgt(px - 28, py + doff * scale + dwmm * scale / 2, 
-                      f"{dwmm}x{dhmm}", size=8, rotate=90, color="#333")
-        elif ej == "O'ng":
-            ds = arc_right(px, py, dw, scale, doff, dhmm, dwmm, eo)
-            dn = svgt(px + dw + 28, py + doff * scale + dwmm * scale / 2, 
-                      f"{dwmm}x{dhmm}", size=8, rotate=90, color="#333")
-        elif ej == "Old":
-            ds = arc_bottom(px, py, dh, scale, doff, dwmm, eo)
-            dn = svgt(px + doff * scale + dwmm * scale / 2, py + dh + 14, 
-                      f"{dwmm}x{dhmm}", size=8, color="#333")
-        elif ej == "Orqa":
-            ds = arc_top(px, py, scale, doff, dwmm, eo)
-            dn = svgt(px + doff * scale + dwmm * scale / 2, py - 6, 
-                      f"{dwmm}x{dhmm}", size=8, color="#333")
-    
-    # ========== BURCHAK CHIZIQLARI ==========
-    burchak_chiziqlari = ""
-    if corners["chap_tepa"]:
-        burchak_chiziqlari += f'<line x1="{px}" y1="{py + 2}" x2="{px + 480 * scale}" y2="{py + 2}" stroke="#16A34A" stroke-width="2"/>'
-        burchak_chiziqlari += f'<text x="{px + 240 * scale}" y="{py - 6}" font-size="7" fill="#16A34A" text-anchor="middle">480</text>'
-    if corners["chap_past"]:
-        burchak_chiziqlari += f'<line x1="{px}" y1="{py + dh - 2}" x2="{px + 480 * scale}" y2="{py + dh - 2}" stroke="#16A34A" stroke-width="2"/>'
-        burchak_chiziqlari += f'<text x="{px + 240 * scale}" y="{py + dh + 14}" font-size="7" fill="#16A34A" text-anchor="middle">480</text>'
-    if corners["ong_tepa"]:
-        burchak_chiziqlari += f'<line x1="{px + dw - 480 * scale}" y1="{py + 2}" x2="{px + dw}" y2="{py + 2}" stroke="#16A34A" stroke-width="2"/>'
-        burchak_chiziqlari += f'<text x="{px + dw - 240 * scale}" y="{py - 6}" font-size="7" fill="#16A34A" text-anchor="middle">480</text>'
-    if corners["ong_past"]:
-        burchak_chiziqlari += f'<line x1="{px + dw - 480 * scale}" y1="{py + dh - 2}" x2="{px + dw}" y2="{py + dh - 2}" stroke="#16A34A" stroke-width="2"/>'
-        burchak_chiziqlari += f'<text x="{px + dw - 240 * scale}" y="{py + dh + 14}" font-size="7" fill="#16A34A" text-anchor="middle">480</text>'
-    
-    # ========== KOMPAS ==========
-    cx_, cy_ = SW - 46, py + 18
-    comp_svg = (f'<circle cx="{cx_}" cy="{cy_}" r="13" fill="none" stroke="#888" stroke-width="1"/>'
-                f'<line x1="{cx_}" y1="{cy_ - 11}" x2="{cx_}" y2="{cy_ + 11}" stroke="#888" stroke-width="1"/>'
-                f'<line x1="{cx_ - 11}" y1="{cy_}" x2="{cx_ + 11}" y2="{cy_}" stroke="#888" stroke-width="1"/>'
-                f'<polygon points="{cx_},{cy_ - 11} {cx_ - 4},{cy_} {cx_ + 4},{cy_}" fill="#333"/>'
-                + svgt(cx_, cy_ - 16, "N", size=8, weight="700", color="#333"))
-    
-    pol_lbl = f"Qalinligi: {floor_mm if pol_bor else 0} mm  ({'Bor' if pol_bor else 'Yoq'})"
-    
-    chamber_info = ""
-    if len(chambers) > 1:
-        chamber_info = f" | {len(chambers)} ta kamera"
-        for i, ch_info in enumerate(chambers):
-            chamber_info += f" | K{i+1}: {ch_info['L']:.1f}x{ch_info['W']:.1f}m"
-    
-    # ========== DEBUG MA'LUMOTLARI ==========
-    door_segments = rp if ej in ["Chap", "O'ng"] else tp
-    main_parts = [p for p in door_segments if p != 480]
-    main_total = sum(main_parts) if main_parts else 0
-    door_width = min(dwmm, main_total) if main_total > 0 else dwmm
-    
-    debug_lines = f'''
-    <!-- ===== DEBUG MA'LUMOTLARI ===== -->
-    <rect x="20" y="130" width="{SW-40}" height="190" fill="#FFF8E1" stroke="#FF6F00" stroke-width="2" rx="6"/>
-    <text x="35" y="155" font-size="13" fill="#000000" font-weight="bold" font-family="monospace">🔍 ESHIK DEBUG MA'LUMOTLARI</text>
-    <line x1="35" y1="165" x2="{SW-35}" y2="165" stroke="#FF6F00" stroke-width="0.5"/>
-    
-    <text x="35" y="185" font-size="11" fill="#0000FF" font-family="monospace">📌 Eshik joyi: {ej} | Pozitsiya: {ep} | Ochilish: {eo}</text>
-    <text x="35" y="205" font-size="11" fill="#0000FF" font-family="monospace">📏 Eshik o'lchami: {dwmm}mm x {dhmm}mm</text>
-    <text x="35" y="225" font-size="11" fill="#008000" font-family="monospace">📋 door_segments: {door_segments}</text>
-    <text x="35" y="245" font-size="11" fill="#FF0000" font-family="monospace">📋 main_parts (480 larsiz): {main_parts}</text>
-    <text x="35" y="265" font-size="11" fill="#8B008B" font-family="monospace">📊 main_total: {main_total}mm | door_width: {door_width}mm</text>
-    <text x="35" y="285" font-size="11" fill="#D2691E" font-family="monospace">🎯 doff (door_off): {doff:.1f}mm</text>
-    <text x="35" y="305" font-size="11" fill="#000000" font-family="monospace">🔲 Chap burchak: {corners['chap_tepa']} | O'ng burchak: {corners['ong_tepa']}</text>
-    '''
-    
-    # ========== SVG ==========
-    return f'''<svg width="100%" viewBox="0 0 {SW} {SH + 120}" xmlns="http://www.w3.org/2000/svg">
-<rect x="20" y="20" width="{SW - 40}" height="{SH + 80}" fill="white" stroke="#111" stroke-width="1.2"/>
-{svgt(390, 56, "TEXNIK CHIZMA", size=14, weight="700")}
-{svgt(390, 74, (proj or "").upper() + chamber_info, size=11)}
-{svgt(SW - 28, 56, code, size=10, anchor="end", color="#888")}
-{comp_svg}
-
-{debug_lines}
-
-{svgt(px + dw / 2, py - 34, "DEVOR REJASI  (TOP VIEW)", size=10, weight="700", color="#555")}
-{room_plan(px, py, dw, dh, wt)}
-{ds}{dn}
-
-<!-- O'LCHAMLAR 4 TOMONDAN -->
-{chain_top(px, py, tm, scale)}
-{chain_bottom(px, py+dh, tm, scale)}
-{chain_left(px, py, rm, scale)}
-{chain_right(px+dw, py, rm, scale)}
-
-{ticks_h(px, py, tm, scale)}
-{ticks_h(px, py+dh, tm, scale)}
-{ticks_v(px, py, rm, scale)}
-{ticks_v(px+dw, py, rm, scale)}
-
-{svgt(px + dw / 2, py + dh / 2 - 6, f"Tashqi: {owmm_c}x{ohmm_c}x{ozmm_c} mm", size=8, color="#999")}
-{svgt(px + dw / 2, py + dh / 2 + 8, f"Ichki:  {iL}x{iW}x{iH} mm", size=8, color="#999")}
-{svgt(px + dw / 2, py + dh + 22, f"Devor qalinligi: {wall_mm} mm", size=9, color="#555")}
-
-{burchak_chiziqlari}
-
-{slab_svg(px, my, dw, dh, tpl, rpl, scale, "PATALOK PANELI")}
-{chain_top(px, my, t_slab_meta, scale)}
-{chain_bottom(px, my+dh, t_slab_meta, scale)}
-{chain_left(px, my, r_slab_meta, scale)}
-{chain_right(px+dw, my, r_slab_meta, scale)}
-{ticks_h(px, my, t_slab_meta, scale)}
-{ticks_h(px, my+dh, t_slab_meta, scale)}
-{ticks_v(px, my, r_slab_meta, scale)}
-{ticks_v(px+dw, my, r_slab_meta, scale)}
-
-{slab_svg(px, by, dw, dh, tpl, rpl, scale, "POL PANELI")}
-{chain_top(px, by, t_slab_meta, scale)}
-{chain_bottom(px, by+dh, t_slab_meta, scale)}
-{chain_left(px, by, r_slab_meta, scale)}
-{chain_right(px+dw, by, r_slab_meta, scale)}
-{ticks_h(px, by, t_slab_meta, scale)}
-{ticks_h(px, by+dh, t_slab_meta, scale)}
-{ticks_v(px, by, r_slab_meta, scale)}
-{ticks_v(px+dw, by, r_slab_meta, scale)}
-
-<rect x="30" y="{my}" width="10" height="10" fill="#16A34A"/>
-{svgt(46, my + 9, "480 mm burchak moduli", size=8, anchor="start", color="#666")}
-<rect x="30" y="{my + 15}" width="10" height="10" fill="none" stroke="#8898A8" stroke-width="1" stroke-dasharray="3,2"/>
-{svgt(46, my + 24, "960 mm asosiy modul", size=8, anchor="start", color="#666")}
-
-<!-- ESHIK BELGILARI -->
-<rect x="200" y="{my}" width="10" height="10" fill="#059669" rx="2"/>
-{svgt(216, my + 9, "Eshik ochilish chizig'i", size=8, anchor="start", color="#666")}
-<rect x="200" y="{my + 15}" width="10" height="10" fill="#fef3c7" stroke="#d97706" stroke-width="1" rx="2"/>
-{svgt(216, my + 24, "Eshik joylashuvi", size=8, anchor="start", color="#666")}
-
-{table_svg}
-
-{title_block(115, tb, 560, 110, proj or "-", code, owmm_c, ohmm_c, ozmm_c, wall_mm, ceil_mm, floor_mm if pol_bor else 0, datetime.now().strftime("%d.%m.%Y"))}
-</svg>'''
-
 
 
 def build_panel_table_for_split(owmm, ohmm, ozmm, wall_mm, ceil_mm, floor_mm, pol_bor,
@@ -3703,8 +2966,8 @@ def build_panel_table_for_split(owmm, ohmm, ozmm, wall_mm, ceil_mm, floor_mm, po
     
     # TEPA devor
     wall_segs_tepa = build_wall_segs(L_outer, chap_tepa_bor, ong_tepa_bor)
-    wall_segs_tepa_no_corner = [s for s in wall_segs_tepa if s != 480]
-    
+    wall_segs_tepa_no_corner = split_corner_segs(wall_segs_tepa, chap_tepa_bor, ong_tepa_bor)
+
     for seg in wall_segs_tepa_no_corner:
         key = f"Tashqi_Devor_TEPA_{seg}_{wall_mm}"
         if key not in total_wall_panels:
@@ -3718,11 +2981,11 @@ def build_panel_table_for_split(owmm, ohmm, ozmm, wall_mm, ceil_mm, floor_mm, po
             }
         total_wall_panels[key]["qty"] += 1
         total_wall_panels[key]["total_m2"] += round((H_outer / 1000) * (seg / 1000), 3)
-    
+
     # PAST devor
     wall_segs_past = build_wall_segs(L_outer, chap_past_bor, ong_past_bor)
-    wall_segs_past_no_corner = [s for s in wall_segs_past if s != 480]
-    
+    wall_segs_past_no_corner = split_corner_segs(wall_segs_past, chap_past_bor, ong_past_bor)
+
     for seg in wall_segs_past_no_corner:
         key = f"Tashqi_Devor_PAST_{seg}_{wall_mm}"
         if key not in total_wall_panels:
@@ -3736,12 +2999,18 @@ def build_panel_table_for_split(owmm, ohmm, ozmm, wall_mm, ceil_mm, floor_mm, po
             }
         total_wall_panels[key]["qty"] += 1
         total_wall_panels[key]["total_m2"] += round((H_outer / 1000) * (seg / 1000), 3)
-    
-    # CHAP/O'NG devorlar
-    wall_segs_short = build_wall_segs(W_outer, chap_past_bor, ong_past_bor)
-    wall_segs_short_no_corner = [s for s in wall_segs_short if s != 480]
-    
-    for seg in wall_segs_short_no_corner:
+
+    # CHAP va O'NG devorlar - bular ikki MUSTAQIL devor: chap devor
+    # chap_tepa/chap_past burchaklari orasida, o'ng devor esa ong_tepa/ong_past
+    # burchaklari orasida turadi. Ular tasodifan bir xil bo'lishi shart emas
+    # (masalan bittasida eshik burchak o'rnida bo'lsa), shuning uchun ALOHIDA
+    # hisoblanadi - avvalgidek bittasini hisoblab 2 ga ko'paytirish xato edi.
+    wall_segs_left = build_wall_segs(W_outer, chap_tepa_bor, chap_past_bor)
+    wall_segs_left_no_corner = split_corner_segs(wall_segs_left, chap_tepa_bor, chap_past_bor)
+    wall_segs_right = build_wall_segs(W_outer, ong_tepa_bor, ong_past_bor)
+    wall_segs_right_no_corner = split_corner_segs(wall_segs_right, ong_tepa_bor, ong_past_bor)
+
+    for seg in wall_segs_left_no_corner + wall_segs_right_no_corner:
         key = f"Tashqi_Devor_W_{seg}_{wall_mm}"
         if key not in total_wall_panels:
             total_wall_panels[key] = {
@@ -3752,8 +3021,8 @@ def build_panel_table_for_split(owmm, ohmm, ozmm, wall_mm, ceil_mm, floor_mm, po
                 "qty": 0,
                 "total_m2": 0
             }
-        total_wall_panels[key]["qty"] += 2
-        total_wall_panels[key]["total_m2"] += round((H_outer / 1000) * (seg / 1000) * 2, 3)
+        total_wall_panels[key]["qty"] += 1
+        total_wall_panels[key]["total_m2"] += round((H_outer / 1000) * (seg / 1000), 3)
 
     # ========== 2. ICHKI DEVORLAR ==========
     if len(chambers) > 1:
@@ -3991,7 +3260,7 @@ def make_ecofrom_table_svg(rows, x=30, y=420, width=900, devor_narx=0, patalok_n
     def cw(key):
         return c[key] * scale
 
-    def cell(x_pos, y_pos, w, h, text, bold=False, bg=None, color="#1e293b", align="middle", size=11):
+    def cell(x_pos, y_pos, w, h, text, bold=False, bg=None, color="#3E6F2E", align="middle", size=11):
         rect = f'<rect x="{x_pos:.1f}" y="{y_pos:.1f}" width="{w:.1f}" height="{h}" fill="{bg or "white"}" stroke="#cbd5e1" stroke-width="1"/>'
         tx = x_pos + w/2 if align == "middle" else x_pos + 6
         anchor = "middle" if align == "middle" else "start"
@@ -4006,8 +3275,8 @@ def make_ecofrom_table_svg(rows, x=30, y=420, width=900, devor_narx=0, patalok_n
     svg += f'<rect x="0" y="0" width="{width}" height="{svg_h}" rx="10" fill="white" stroke="#64748b" stroke-width="2"/>'
 
     # Sarlavha
-    svg += f'<rect x="0" y="0" width="{width}" height="{title_h}" rx="10" fill="#0f172a"/>'
-    svg += f'<rect x="0" y="{title_h-10}" width="{width}" height="10" fill="#0f172a"/>'
+    svg += f'<rect x="0" y="0" width="{width}" height="{title_h}" rx="10" fill="#2F4A28"/>'
+    svg += f'<rect x="0" y="{title_h-10}" width="{width}" height="10" fill="#2F4A28"/>'
     svg += f'<text x="{width/2}" y="{title_h/2 + 7}" font-size="18" font-weight="900" fill="white" text-anchor="middle" font-family="Arial,sans-serif" letter-spacing="1">📋 PANEL SPETSIFIKATSIYASI</text>'
     svg += f'<text x="{width - 20}" y="{title_h/2 + 7}" font-size="11" fill="#94a3b8" text-anchor="end" font-family="Arial,sans-serif">v.1.0</text>'
 
@@ -4024,7 +3293,7 @@ def make_ecofrom_table_svg(rows, x=30, y=420, width=900, devor_narx=0, patalok_n
         ("sum", "SUMMA $", True),
     ]
     for key, label, bold in headers:
-        svg += cell(col(key), hy, cw(key), header_h, label, bold=True, bg="#f1f5f9", color="#1e293b", size=12)
+        svg += cell(col(key), hy, cw(key), header_h, label, bold=True, bg="#f1f5f9", color="#3E6F2E", size=12)
 
     # Ma'lumot qatorlari
     colors_alt = ["#ffffff", "#f8fafc"]
@@ -4060,7 +3329,7 @@ def make_ecofrom_table_svg(rows, x=30, y=420, width=900, devor_narx=0, patalok_n
             name_color = "#dc2626"
             panel_narx = eshik_narx
         else:
-            name_color = "#1e293b"
+            name_color = "#3E6F2E"
             panel_narx = devor_narx
 
         qty_display = str(row["qty"])
@@ -4091,10 +3360,10 @@ def make_ecofrom_table_svg(rows, x=30, y=420, width=900, devor_narx=0, patalok_n
         svg += cell(col("len"), ry, cw("len"), row_h, str(row["length"]), bg=bg, color="#334155", size=10)
         svg += cell(col("wid"), ry, cw("wid"), row_h, str(row["width"]), bg=bg, color="#334155", size=10)
         svg += cell(col("thk"), ry, cw("thk"), row_h, str(row["thickness"]), bg=bg, color="#334155", size=10)
-        svg += cell(col("qty"), ry, cw("qty"), row_h, qty_display, bg=bg, color="#1e293b", bold=True, size=11)
+        svg += cell(col("qty"), ry, cw("qty"), row_h, qty_display, bg=bg, color="#3E6F2E", bold=True, size=11)
         svg += cell(col("m2"), ry, cw("m2"), row_h, m2_display, bg=bg, color="#334155", size=10)
-        svg += cell(col("price"), ry, cw("price"), row_h, price_display, bg=bg, color="#0f172a", bold=True, size=10)
-        svg += cell(col("sum"), ry, cw("sum"), row_h, sum_display, bg=bg, color="#0f172a", bold=True, size=10)
+        svg += cell(col("price"), ry, cw("price"), row_h, price_display, bg=bg, color="#2F4A28", bold=True, size=10)
+        svg += cell(col("sum"), ry, cw("sum"), row_h, sum_display, bg=bg, color="#2F4A28", bold=True, size=10)
 
     # Footer
     fy = title_h + header_h + total_rows * row_h
@@ -4105,8 +3374,8 @@ def make_ecofrom_table_svg(rows, x=30, y=420, width=900, devor_narx=0, patalok_n
     grand_total = total_sum + total_eshik_sum
 
     svg += f'<text x="20" y="{fy+24}" font-size="13" font-weight="800" fill="#15803d" font-family="Arial,sans-serif">📊 JAMI:</text>'
-    svg += f'<text x="20" y="{fy+48}" font-size="11" fill="#334155" font-family="Arial,sans-serif"> Panellar: <tspan font-weight="700" fill="#0f172a">{total_qty} ta</tspan></text>'
-    svg += f'<text x="200" y="{fy+48}" font-size="11" fill="#334155" font-family="Arial,sans-serif"> Maydon: <tspan font-weight="700" fill="#0f172a">{total_m2:.2f} m²</tspan></text>'
+    svg += f'<text x="20" y="{fy+48}" font-size="11" fill="#334155" font-family="Arial,sans-serif"> Panellar: <tspan font-weight="700" fill="#2F4A28">{total_qty} ta</tspan></text>'
+    svg += f'<text x="200" y="{fy+48}" font-size="11" fill="#334155" font-family="Arial,sans-serif"> Maydon: <tspan font-weight="700" fill="#2F4A28">{total_m2:.2f} m²</tspan></text>'
     
     # Eshik narxi alohida ko'rsatiladi
     if total_eshik_sum > 0:
@@ -4294,7 +3563,7 @@ def make_svg_split_multi(L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor, proj, cod
               stroke="#3b82f6" stroke-width="2" rx="4"/>
         <text x="{cx_rect + cw_rect/2}" y="{cy_rect + ch_rect/2 - 12}" 
               text-anchor="middle" font-size="{FONT_LABEL + 4}" 
-              font-weight="800" fill="#1e293b">KAMERA {ch["id"]}</text>
+              font-weight="800" fill="#3E6F2E">KAMERA {ch["id"]}</text>
         <text x="{cx_rect + cw_rect/2}" y="{cy_rect + ch_rect/2 + 18}" 
               text-anchor="middle" font-size="{FONT_DIM}" 
               fill="#475569" font-weight="600">{ch["L"]:.2f} x {ch["W"]:.2f} m</text>
@@ -4381,10 +3650,10 @@ def make_svg_split_multi(L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor, proj, cod
             ch_x, ch_y, ch_L, ch_W = 0, 0, owmm, ohmm
             
         if e_joyi in ["Chap", "O'ng"]:
-            doff_local = door_off(build_wall_segs(ch_W), e_pozitsiya, "vertical", dwmm)
+            doff_local = door_off(build_wall_segs(ch_W), e_pozitsiya, "vertical", dwmm, True, True)
             absolute_offset = ch_y + doff_local
         else:
-            doff_local = door_off(build_wall_segs(ch_L), e_pozitsiya, "horizontal", dwmm)
+            doff_local = door_off(build_wall_segs(ch_L), e_pozitsiya, "horizontal", dwmm, True, True)
             absolute_offset = ch_x + doff_local
 
         # Eshik chizish - qalin va aniq
@@ -4426,7 +3695,7 @@ def make_svg_split_multi(L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor, proj, cod
     <line x1="{cx_-18}" y1="{cy_}" x2="{cx_+18}" y2="{cy_}" stroke="#94a3b8" stroke-width="2"/>
     <polygon points="{cx_},{cy_-18} {cx_-6},{cy_} {cx_+6},{cy_}" fill="#ef4444"/>
     <polygon points="{cx_},{cy_+18} {cx_-6},{cy_} {cx_+6},{cy_}" fill="#94a3b8"/>
-    {svgt(cx_, cy_-28, "N", size=FONT_LABEL+2, weight="800", color="#1e293b")}
+    {svgt(cx_, cy_-28, "N", size=FONT_LABEL+2, weight="800", color="#3E6F2E")}
     {svgt(cx_, cy_+36, "S", size=FONT_SMALL, weight="600", color="#64748b")}
     {svgt(cx_-32, cy_, "W", size=FONT_SMALL, weight="600", color="#64748b")}
     {svgt(cx_+32, cy_, "E", size=FONT_SMALL, weight="600", color="#64748b")}
@@ -4476,10 +3745,10 @@ def make_svg_split_multi(L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor, proj, cod
     </filter>
 </defs>
 
-<rect x="20" y="20" width="{SW-40}" height="{SH-40}" fill="white" stroke="#1e293b" stroke-width="2.5" rx="10" filter="url(#shadow)"/>
+<rect x="20" y="20" width="{SW-40}" height="{SH-40}" fill="white" stroke="#3E6F2E" stroke-width="2.5" rx="10" filter="url(#shadow)"/>
 
 <!-- ========== SARLAVHA ========== -->
-{svgt(SW/2, 70, "TEXNIK CHIZMA (BO'LINGAN MULTI-KAMERA)", size=FONT_TITLE+6, weight="900", color="#0f172a")}
+{svgt(SW/2, 70, "TEXNIK CHIZMA (BO'LINGAN MULTI-KAMERA)", size=FONT_TITLE+6, weight="900", color="#2F4A28")}
 {svgt(SW/2, 100, (proj or "").upper() + chamber_info, size=FONT_SUB+2, color="#475569")}
 {svgt(SW-50, 70, code, size=FONT_SUB+2, anchor="end", color="#64748b")}
 <line x1="40" y1="115" x2="{SW-40}" y2="115" stroke="#e2e8f0" stroke-width="1.5"/>
@@ -4508,8 +3777,8 @@ def make_svg_split_multi(L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor, proj, cod
 {ticks_v(px+dw, py, rm, scale)}
 
 <!-- Tashqi o'lcham -->
-{svgt(px+dw/2, py+dh+38, f"L = {owmm} mm ({L:.2f} m)", size=FONT_DIM+1, color="#1e293b", weight="600")}
-{svgt(px-45, py+dh/2, f"W = {ohmm} mm ({W:.2f} m)", size=FONT_DIM+1, color="#1e293b", weight="600", rotate=90)}
+{svgt(px+dw/2, py+dh+38, f"L = {owmm} mm ({L:.2f} m)", size=FONT_DIM+1, color="#3E6F2E", weight="600")}
+{svgt(px-45, py+dh/2, f"W = {ohmm} mm ({W:.2f} m)", size=FONT_DIM+1, color="#3E6F2E", weight="600", rotate=90)}
 {svgt(px+dw/2, py+dh+55, f"Devor qalinligi: {wall_mm} mm (ichki to'siqlar tekis panellardan)", size=FONT_SMALL, color="#475569")}
 
 <!-- ========== BURCHAK MODULLARI ========== -->
@@ -4526,7 +3795,7 @@ def make_svg_split_multi(L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor, proj, cod
 {ticks_h(px, my+dh, t_slab_meta, scale)}
 {ticks_v(px, my, r_slab_meta, scale)}
 {ticks_v(px+dw, my, r_slab_meta, scale)}
-{svgt(px+dw/2, my+dh+38, f"Patalok qalinligi: {ceil_mm} mm", size=FONT_DIM+1, color="#1e293b", weight="600")}
+{svgt(px+dw/2, my+dh+38, f"Patalok qalinligi: {ceil_mm} mm", size=FONT_DIM+1, color="#3E6F2E", weight="600")}
 
 <!-- ========== 3. POL PANELI ========== -->
 <rect x="{px-20}" y="{by-65}" width="{dw+40}" height="{dh+85}" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="6"/>
@@ -4539,7 +3808,7 @@ def make_svg_split_multi(L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor, proj, cod
 {ticks_h(px, by+dh, t_slab_meta, scale)}
 {ticks_v(px, by, r_slab_meta, scale)}
 {ticks_v(px+dw, by, r_slab_meta, scale)}
-{svgt(px+dw/2, by+dh+38, pol_lbl, size=FONT_DIM+1, color="#1e293b", weight="600")}
+{svgt(px+dw/2, by+dh+38, pol_lbl, size=FONT_DIM+1, color="#3E6F2E", weight="600")}
 
 <!-- ========== MODUL TUSHUNTIRISHLARI ========== -->
 <rect x="40" y="{my-30}" width="20" height="20" fill="#16A34A" rx="4"/>
@@ -4572,13 +3841,8 @@ def make_svg(L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor, proj, code, ej, eshik
     
     # ========== ESHIK MA'LUMOTLARI ==========
     eshik_turi = eshik
-    if eshik_turi == "Custom":
-        eshik_w = st.session_state.get("eshik_custom_width", 900)
-        eshik_h = st.session_state.get("eshik_custom_height", 1900)
-        eshik_soni = st.session_state.get("eshik_soni", 1)
-    else:
-        eshik_w, eshik_h = door_dim_custom(eshik_turi)
-        eshik_soni = 1
+    eshik_w, eshik_h = door_dim(eshik_turi)
+    eshik_soni = 1
     
     # ========== KAMERA BO'LISH ==========
     kamera_bolish_turi = st.session_state.get("kamera_bolish_turi", "Yo'q")
@@ -4774,18 +4038,11 @@ def make_svg(L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor, proj, code, ej, eshik
         owmm, ohmm, ozmm, wall_mm, ceil_mm, floor_mm, pol_bor,
         chambers, eshiklar
     )
-    
-    fixed_panel_rows = []
-    for row in panel_rows:
-        if "Potolok/Pol paneli" in row.get("Nomi", ""):
-            row["Soni"] = row["Soni"] * (len(tpl_segs) // 2 if len(tpl_segs) > 2 else 2)
-            row["Maydon m²"] = (row["Uzunlik"] / 1000) * (row["Eni"] / 1000) * row["Soni"]
-        fixed_panel_rows.append(row)
 
     # ===== NARXLARNI JADVALGA UZATISH =====
     table_svg = make_ecofrom_table_svg(
-    panel_rows,  # <-- TO'G'RI
-    x=30, 
+    panel_rows,
+    x=30,
     y=by + dh + 110, 
     width=730,
     devor_narx=devor_narx,
@@ -4799,19 +4056,19 @@ def make_svg(L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor, proj, code, ej, eshik
     dn = ""
     if has_door:
         if ej == "Chap":
-            doff = door_off(rp, ep, "vertical", dwmm)
+            doff = door_off(rp, ep, "vertical", dwmm, chap_burchak_bor, ong_burchak_bor)
             ds = arc_left(px, py, scale, doff, dhmm, dwmm, eo)
             dn = svgt(px - 28, py + doff * scale + dwmm * scale / 2, f"{dwmm}x{dhmm}", size=8, rotate=90, color="#333")
         elif ej == "O'ng":
-            doff = door_off(rp, ep, "vertical", dwmm)
+            doff = door_off(rp, ep, "vertical", dwmm, chap_burchak_bor, ong_burchak_bor)
             ds = arc_right(px, py, dw, scale, doff, dhmm, dwmm, eo)
             dn = svgt(px + dw + 28, py + doff * scale + dwmm * scale / 2, f"{dwmm}x{dhmm}", size=8, rotate=90, color="#333")
         elif ej == "Old":
-            doff = door_off(tp, ep, "horizontal", dwmm)
+            doff = door_off(tp, ep, "horizontal", dwmm, chap_burchak_bor, ong_burchak_bor)
             ds = arc_bottom(px, py, dh, scale, doff, dwmm, eo)
             dn = svgt(px + doff * scale + dwmm * scale / 2, py + dh + 14, f"{dwmm}x{dhmm}", size=8, color="#333")
         elif ej == "Orqa":
-            doff = door_off(tp, ep, "horizontal", dwmm)
+            doff = door_off(tp, ep, "horizontal", dwmm, chap_burchak_bor, ong_burchak_bor)
             ds = arc_top(px, py, scale, doff, dwmm, eo)
             dn = svgt(px + doff * scale + dwmm * scale / 2, py - 6, f"{dwmm}x{dhmm}", size=8, color="#333")
     
@@ -4844,7 +4101,7 @@ def make_svg(L, W, H, wall_mm, ceil_mm, floor_mm, pol_bor, proj, code, ej, eshik
     
     # ========== SVG ==========
     return f'''<svg width="100%" viewBox="0 0 {SW} {SH + 120}" xmlns="http://www.w3.org/2000/svg">
-<rect x="20" y="20" width="{SW - 40}" height="{SH + 80}" fill="white" stroke="#111" stroke-width="1.2"/>
+<rect x="20" y="20" width="{SW - 40}" height="{SH + 80}" fill="white" stroke="#2F4A28" stroke-width="1.2"/>
 {svgt(390, 56, "TEXNIK CHIZMA", size=14, weight="700")}
 {svgt(390, 74, (proj or "").upper() + chamber_info, size=11)}
 {svgt(SW - 28, 56, code, size=10, anchor="end", color="#888")}
@@ -4942,13 +4199,13 @@ def make_svg_multi(L, W, heights_list, n_chambers, corridor_w, corridor_pos, wal
         return (f'<text x="{x}" y="{y}" font-family="Arial, sans-serif" font-size="{size}" '
                 f'font-weight="{weight}" fill="{color}" text-anchor="{anchor}">{text}</text>')
 
-    def dim_h_local(x1, x2, y, text, color="#0f172a", size=16, ext=10):
+    def dim_h_local(x1, x2, y, text, color="#2F4A28", size=16, ext=10):
         return (f'<line x1="{x1}" y1="{y}" x2="{x2}" y2="{y}" stroke="{color}" stroke-width="2"/>'
                 f'<line x1="{x1}" y1="{y-ext}" x2="{x1}" y2="{y+ext}" stroke="{color}" stroke-width="2"/>'
                 f'<line x1="{x2}" y1="{y-ext}" x2="{x2}" y2="{y+ext}" stroke="{color}" stroke-width="2"/>'
                 + svgt_local((x1+x2)/2, y-15, text, size=size, weight="600", color=color))
 
-    def dim_v_local(x, y1, y2, text, color="#0f172a", size=16, ext=10):
+    def dim_v_local(x, y1, y2, text, color="#2F4A28", size=16, ext=10):
         cy_m = (y1+y2)/2
         return (f'<line x1="{x}" y1="{y1}" x2="{x}" y2="{y2}" stroke="{color}" stroke-width="2"/>'
                 f'<line x1="{x-ext}" y1="{y1}" x2="{x+ext}" y2="{y1}" stroke="{color}" stroke-width="2"/>'
@@ -4957,14 +4214,14 @@ def make_svg_multi(L, W, heights_list, n_chambers, corridor_w, corridor_pos, wal
                 f'fill="{color}" transform="rotate(90, {x+25}, {cy_m})" text-anchor="middle">{text}</text>')
 
     svg = f'''<svg width="100%" viewBox="0 0 {SW} {SH}" xmlns="http://www.w3.org/2000/svg" style="background-color:#fcfcfc;">
-<rect x="40" y="40" width="{SW-80}" height="{SH-80}" fill="white" stroke="#1e293b" stroke-width="3" rx="15"/>
-{svgt_local(SW/2, 120, "MULTI-KAMERA KOMPLEKS TEXNIK CHIZMASI", size=42, weight="800", color="#0f172a")}
+<rect x="40" y="40" width="{SW-80}" height="{SH-80}" fill="white" stroke="#3E6F2E" stroke-width="3" rx="15"/>
+{svgt_local(SW/2, 120, "MULTI-KAMERA KOMPLEKS TEXNIK CHIZMASI", size=42, weight="800", color="#2F4A28")}
 {svgt_local(SW/2, 175, f"LOYIHA: {(proj or '').upper()} | KOD: {code}", size=24, color="#475569")}
 {svgt_local(SW-100, 120, datetime.now().strftime("%d.%m.%Y"), size=20, anchor="end", color="#94a3b8")}
 <circle cx="{SW-120}" cy="{py+30}" r="24" fill="none" stroke="#94a3b8" stroke-width="2"/>
 <line x1="{SW-120}" y1="{py+10}" x2="{SW-120}" y2="{py+50}" stroke="#94a3b8" stroke-width="2"/>
-<polygon points="{SW-120},{py+10} {SW-112},{py+30} {SW-128},{py+30}" fill="#0f172a"/>
-{svgt_local(SW-120, py+2, "N", size=16, weight="700", color="#0f172a")}
+<polygon points="{SW-120},{py+10} {SW-112},{py+30} {SW-128},{py+30}" fill="#2F4A28"/>
+{svgt_local(SW-120, py+2, "N", size=16, weight="700", color="#2F4A28")}
 <rect x="{px}" y="{py}" width="{dw}" height="{dh}" fill="none" stroke="#334155" stroke-width="{wt}" rx="2"/>
 <rect x="{px + wt}" y="{py + wt}" width="{dw - 2*wt}" height="{dh - 2*wt}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="10,6"/>'''
 
@@ -5003,7 +4260,8 @@ def make_svg_multi(L, W, heights_list, n_chambers, corridor_w, corridor_pos, wal
             cham_L_real = L - corridor_w; cham_W_real = W / n_chambers
             svg += (f'<rect x="{cor_x2}" y="{py}" width="{cor_w_s}" height="{dh}" fill="#fef3c7" opacity="0.7"/>'
                     f'<line x1="{ox2}" y1="{py}" x2="{ox2}" y2="{py+dh}" stroke="#d97706" stroke-width="3" stroke-dasharray="12,8"/>'
-                    + svgt_local(cor_x2+cor_w_s/2, py+dh/2, f"YO'LAK\n{corridor_w}m", size=24, weight="700", color="#92400e"))
+                    + svgt_local(cor_x2+cor_w_s/2, py+dh/2-5, "YO'LAK", size=24, weight="700", color="#92400e")
+                    + svgt_local(cor_x2+cor_w_s/2, py+dh/2+22, f"{corridor_w:.2f} m", size=18, color="#b45309"))
             svg += dim_h_local(cor_x2, cor_x2+cor_w_s, py-40, f"{corridor_w}m", color="#d97706", size=22, ext=8)
             for i in range(n_chambers):
                 cy2 = py+i*(dh/n_chambers); ch = dh/n_chambers
@@ -5020,8 +4278,8 @@ def make_svg_multi(L, W, heights_list, n_chambers, corridor_w, corridor_pos, wal
                     + svgt_local(px+dw/2, cy2+ch/2+22, f"{L:.1f} x {cham_W_real:.1f} m", size=18, color="#3b82f6"))
             if i < n_chambers-1: svg += f'<line x1="{px}" y1="{cy2+ch}" x2="{px+dw}" y2="{cy2+ch}" stroke="#93c5fd" stroke-width="2" stroke-dasharray="10,5"/>'
 
-    svg += dim_h_local(px, px+dw, py-110, f"L = {owmm} mm ({L:.2f} m)", color="#0f172a", size=24, ext=12)
-    svg += dim_v_local(px+dw+110, py, py+dh, f"W = {ohmm} mm ({W:.2f} m)", color="#0f172a", size=24, ext=12)
+    svg += dim_h_local(px, px+dw, py-110, f"L = {owmm} mm ({L:.2f} m)", color="#2F4A28", size=24, ext=12)
+    svg += dim_v_local(px+dw+110, py, py+dh, f"W = {ohmm} mm ({W:.2f} m)", color="#2F4A28", size=24, ext=12)
     iL2 = max(0, owmm-2*wall_mm); iW2 = max(0, ohmm-2*wall_mm)
     svg += svgt_local(px+dw/2, py+dh/2-15, f"Tashqi: {owmm} x {ohmm} x {maxHmm} mm", size=18, color="#94a3b8")
     svg += svgt_local(px+dw/2, py+dh/2+12, f"Ichki: {iL2} x {iW2} mm", size=18, color="#94a3b8")
@@ -5063,12 +4321,12 @@ def make_svg_multi(L, W, heights_list, n_chambers, corridor_w, corridor_pos, wal
             f'<text x="485" y="{leg_y+47}" font-family="Arial" font-size="18" fill="#475569">Sovutgich kamerasi</text>')
 
     svg += (f'<rect x="80" y="{SH-350}" width="{SW-160}" height="270" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2" rx="12"/>'
-            f'<rect x="80" y="{SH-350}" width="{SW-160}" height="55" fill="#0f172a" rx="12"/>'
-            f'<rect x="80" y="{SH-320}" width="{SW-160}" height="25" fill="#0f172a"/>'
+            f'<rect x="80" y="{SH-350}" width="{SW-160}" height="55" fill="#2F4A28" rx="12"/>'
+            f'<rect x="80" y="{SH-320}" width="{SW-160}" height="25" fill="#2F4A28"/>'
             + svgt_local(SW/2, SH-320, "TECHNICAL DRAWING", size=26, weight="800", color="white")
           
             + svgt_local(1050, SH-275, "SANA:", size=18, anchor="start", weight="600", color="#475569")
-            + svgt_local(1130, SH-275, datetime.now().strftime("%d.%m.%Y"), size=20, anchor="start", weight="700", color="#0f172a")
+            + svgt_local(1130, SH-275, datetime.now().strftime("%d.%m.%Y"), size=20, anchor="start", weight="700", color="#2F4A28")
             + svgt_local(120, SH-225, f"O'lcham: {owmm}x{ohmm}x{maxHmm} mm | Devor: {wall_mm} mm | Patalok: {ceil_mm} mm | Pol: {floor_mm if pol_bor else 0} mm", size=18, anchor="start", color="#334155")
             + svgt_local(120, SH-185, f"Kameralar: {n_chambers} ta | Panel eni: {pw}m | Jami panel: {all_p} ta", size=18, anchor="start", color="#334155")
             + svgt_local(120, SH-145, f"Devor panellari: {dp} ta | Patalok: {pp} ta | Pol: {flp if pol_bor else 0} ta", size=16, anchor="start", color="#64748b")
@@ -5076,31 +4334,148 @@ def make_svg_multi(L, W, heights_list, n_chambers, corridor_w, corridor_pos, wal
             + "</svg>")
     return svg
 
+def _draw_pdf_floor_plan(L, W, wall_mm, ej=None, ep=None, door_w_m=None):
+    """
+    PDF uchun sodda, lekin haqiqiy xona rejasi rasmini chizadi (matplotlib
+    bilan - cairosvg/weasyprint/imgkit kabi tashqi (native) kutubxonalarga
+    muhtoj emas, shuning uchun har qanday muhitda ishonchli ishlaydi).
+    To'liq batafsil texnik chizma emas, balki o'lchamlar va eshik joyini
+    ko'rsatuvchi umumiy reja. PNG baytlarini qaytaradi.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+    import io as _io
+
+    T = max(wall_mm, 0) / 1000.0
+    pad = max(L, W) * 0.18 + 0.3
+    fig, ax = plt.subplots(figsize=(7.2, 7.2 * (W + 2 * pad) / (L + 2 * pad)))
+    ax.set_xlim(-pad, L + pad)
+    ax.set_ylim(-pad, W + pad)
+    ax.set_aspect('equal')
+    ax.axis('off')
+
+    # Tashqi devor konturi va ichki (foydali) maydon
+    ax.add_patch(mpatches.Rectangle((0, 0), L, W, facecolor="#DCEBD6", edgecolor="#2F4A28", linewidth=2.5, zorder=1))
+    inner_w, inner_h = max(L - 2 * T, 0.01), max(W - 2 * T, 0.01)
+    ax.add_patch(mpatches.Rectangle((T, T), inner_w, inner_h, facecolor="white", edgecolor="#5E944D", linewidth=1.2, zorder=2))
+
+    # Eshik joyi (agar ma'lumot berilgan bo'lsa)
+    if ej and door_w_m and door_w_m > 0:
+        if ej in ("Old", "Orqa"):
+            dw = min(door_w_m, L * 0.9)
+            half = dw / 2
+            lo, hi = half, L - half
+            raw = {"Chap tomon burchak o'rniga": half, "Biroz chapga": half + 0.3,
+                   "O'rta": L / 2, "Biroz o'ngga": L - half - 0.3,
+                   "O'ng tomon burchak o'rniga": L - half}.get(ep, L / 2)
+            center = max(lo, min(raw, hi)) if lo <= hi else L / 2
+            y = 0 if ej == "Old" else W
+            ax.plot([center - dw / 2, center + dw / 2], [y, y], color="white", linewidth=6, solid_capstyle="butt", zorder=3)
+            ax.plot([center - dw / 2, center + dw / 2], [y, y], color="#2F4A28", linewidth=2, zorder=4)
+        else:
+            dw = min(door_w_m, W * 0.9)
+            half = dw / 2
+            lo, hi = half, W - half
+            raw = {"Chap tomon burchak o'rniga": half, "Biroz chapga": half + 0.3,
+                   "O'rta": W / 2, "Biroz o'ngga": W - half - 0.3,
+                   "O'ng tomon burchak o'rniga": W - half}.get(ep, W / 2)
+            center = max(lo, min(raw, hi)) if lo <= hi else W / 2
+            x = 0 if ej == "Chap" else L
+            ax.plot([x, x], [center - dw / 2, center + dw / 2], color="white", linewidth=6, solid_capstyle="butt", zorder=3)
+            ax.plot([x, x], [center - dw / 2, center + dw / 2], color="#2F4A28", linewidth=2, zorder=4)
+
+    # O'lcham chiziqlari
+    dim_off = pad * 0.4
+    ax.annotate('', xy=(L, -dim_off), xytext=(0, -dim_off), arrowprops=dict(arrowstyle='<->', color="#535353", lw=1.2))
+    ax.text(L / 2, -dim_off * 1.35, f"{L:.2f} m", ha='center', va='top', fontsize=12, color="#2F4A28", fontweight='bold')
+    ax.annotate('', xy=(-dim_off, W), xytext=(-dim_off, 0), arrowprops=dict(arrowstyle='<->', color="#535353", lw=1.2))
+    ax.text(-dim_off * 1.35, W / 2, f"{W:.2f} m", ha='right', va='center', fontsize=12, color="#2F4A28", fontweight='bold', rotation=90)
+
+    buf = _io.BytesIO()
+    fig.savefig(buf, format='png', dpi=170, bbox_inches='tight', facecolor='white')
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
+
+
 # PDF REPORT
 # Fayl boshiga qo'shing:
 def generate_pdf_report(project_name, room_code, L, W, H, wall_mm, ceil_mm, floor_mm,
                         pol_bor, d_turi, p_turi, pol_turi, eshik, agregat,
                         total_panels, hajm, inner_hajm, total_area,
-                        fig_3d=None, svg_string=None):
+                        fig_3d=None, svg_string=None,
+                        ej=None, ep=None, door_w_m=None, door_h_m=None,
+                        panel_jami=None, eshik_jami=None, agregat_jami=None,
+                        germitika_jami=None, qoshimcha_jami=None,
+                        jami_xarajat=None, m2_narx=None):
     """
     PDF hisobot yaratish - SVG ni rasm sifatida qo'shish
+
+    Xarajat parametrlari (panel_jami...m2_narx) va ej/ep/door_w_m/door_h_m
+    ixtiyoriy - berilmasa, mos bo'lim PDF'da ko'rsatilmaydi (eski
+    chaqiruvlar bilan moslik uchun).
     """
     try:
         from fpdf import FPDF
         import tempfile
         import os
         from datetime import datetime
-        
+
+        # Eski (klassik) fpdf kutubxonasi faqat Latin-1 belgilarni qo'llab-
+        # quvvatlaydi - kirillcha yoki boshqa Latin-1'dan tashqari belgi
+        # kelsa, pdf.cell() UnicodeEncodeError bilan quladi. Foydalanuvchi
+        # erkin matn kiritadigan maydonlarni (loyiha nomi, kod) oldindan
+        # xavfsiz qilib tozalaymiz - qo'llab-quvvatlanmagan belgilar '?' ga
+        # almashtiriladi, lekin PDF baribir yaroqli bo'lib chiqadi.
+        def _pdf_safe(text):
+            return str(text).encode('latin-1', 'replace').decode('latin-1')
+
+        project_name = _pdf_safe(project_name) if project_name else project_name
+        room_code = _pdf_safe(room_code) if room_code else room_code
+
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
-        
-        # Sarlavha
-        pdf.set_fill_color(17, 24, 39)
+
+        def section_title(pdf, text):
+            """Har bir bo'lim sarlavhasini bir xil uslubda (och yashil fon
+            chizig'i bilan) chizadi - EcoProm brendiga mos yagona ko'rinish."""
+            pdf.set_fill_color(234, 245, 230)
+            pdf.set_text_color(47, 74, 40)
+            pdf.set_font('Helvetica', 'B', 11)
+            pdf.cell(0, 9, f'  {text}', fill=True, ln=True)
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(2)
+
+        def _fit_text(pdf, text, max_w):
+            """Matnni berilgan kenglikka (mm) sig'dirish uchun kerak bo'lsa
+            oxiriga '...' qo'yib qisqartiradi (so'z o'rtasidan kesib
+            tashlash o'rniga)."""
+            text = str(text)
+            if pdf.get_string_width(text) <= max_w:
+                return text
+            while text and pdf.get_string_width(text + '...') > max_w:
+                text = text[:-1]
+            return (text + '...') if text else '...'
+
+        # Sarlavha - EcoProm brend rangi (to'q yashil)
+        pdf.set_fill_color(47, 74, 40)
         pdf.rect(0, 0, 210, 25, 'F')
+        logo_path = Path(__file__).parent / "assets" / "ecoprom_icon.png"
+        if logo_path.exists():
+            try:
+                pdf.image(str(logo_path), x=8, y=4, h=17)
+            except Exception:
+                pass
         pdf.set_text_color(255, 255, 255)
         pdf.set_font('Helvetica', 'B', 16)
+        pdf.set_xy(0, 5)
         pdf.cell(0, 15, 'TECHNICAL REPORT', ln=True, align='C')
-        
+        pdf.set_font('Helvetica', '', 8)
+        pdf.set_xy(0, 16)
+        pdf.cell(0, 6, 'EcoProm - High-Quality Sandwich Panels', align='C')
+
         # Loyiha ma'lumotlari
         pdf.set_y(32)
         pdf.set_text_color(0, 0, 0)
@@ -5111,10 +4486,8 @@ def generate_pdf_report(project_name, room_code, L, W, H, wall_mm, ceil_mm, floo
         pdf.ln(4)
         
         # 1. ASOSIY PARAMETRLAR
-        pdf.set_font('Helvetica', 'B', 11)
-        pdf.cell(0, 8, '1. ASOSIY PARAMETRLAR', ln=True)
-        pdf.ln(2)
-        
+        section_title(pdf, '1. ASOSIY PARAMETRLAR')
+
         # Jadval
         pdf.set_fill_color(240, 240, 240)
         pdf.set_font('Helvetica', 'B', 9)
@@ -5130,31 +4503,31 @@ def generate_pdf_report(project_name, room_code, L, W, H, wall_mm, ceil_mm, floo
         pdf.ln()
         
         pdf.set_font('Helvetica', '', 9)
+        eshik_label = door_catalog_label(eshik) if eshik in DOOR_CATALOG else str(eshik)
+        agregat_label = agregat_catalog_label(agregat) if agregat in AGREGAT_CATALOG else str(agregat)
         data_rows = [
             ['Tashqi hajm', f'{hajm} m3', 'Ichki hajm', f'{inner_hajm} m3'],
             ['Umumiy maydon', f'{total_area} m2', 'Jami panellar', f'{total_panels} ta'],
             ['Devor qalinligi', f'{wall_mm} mm', 'Patalok qalinligi', f'{ceil_mm} mm'],
             ['Pol qalinligi', f'{floor_mm if pol_bor else 0} mm', 'Pol holati', 'Bor' if pol_bor else 'Yo\'q'],
-            ['Devor turi', str(d_turi)[:15], 'Patalok turi', str(p_turi)[:15]],
-            ['Pol turi', str(pol_turi or 'Mavjud emas')[:15], 'Eshik', str(eshik)[:20]],
-            ['Agregat', str(agregat)[:20], 'Olcham', f'{L}x{W}x{H} m'],
+            ['Devor turi', str(d_turi), 'Patalok turi', str(p_turi)],
+            ['Pol turi', str(pol_turi or 'Mavjud emas'), 'Eshik', _pdf_safe(eshik_label)],
+            ['Agregat', _pdf_safe(agregat_label), 'Olcham', f'{L}x{W}x{H} m'],
         ]
-        
+
         for row in data_rows:
-            pdf.cell(col1, 6, str(row[0]), border=1, align='L')
-            pdf.cell(col2, 6, str(row[1]), border=1, align='C')
-            pdf.cell(col1, 6, str(row[2]), border=1, align='L')
-            pdf.cell(col2, 6, str(row[3]), border=1, align='C')
+            pdf.cell(col1, 6, _fit_text(pdf, row[0], col1 - 4), border=1, align='L')
+            pdf.cell(col2, 6, _fit_text(pdf, row[1], col2 - 4), border=1, align='C')
+            pdf.cell(col1, 6, _fit_text(pdf, row[2], col1 - 4), border=1, align='L')
+            pdf.cell(col2, 6, _fit_text(pdf, row[3], col2 - 4), border=1, align='C')
             pdf.ln()
         
         pdf.ln(5)
         
         # 2. TEXNIK CHIZMA - SVG ni rasm sifatida qo'shish
         if svg_string:
-            pdf.set_font('Helvetica', 'B', 11)
-            pdf.cell(0, 8, '2. TEXNIK CHIZMA', ln=True)
-            pdf.ln(2)
-            
+            section_title(pdf, '2. TEXNIK CHIZMA')
+
             img_added = False
             
             # ===== USUL 1: cairosvg =====
@@ -5237,65 +4610,86 @@ def generate_pdf_report(project_name, room_code, L, W, H, wall_mm, ceil_mm, floo
                 except Exception as e:
                     print(f"imgkit xatosi: {e}")
             
-            # ===== USUL 4: matplotlib =====
+            # ===== USUL 4: sodda xona rejasi (matplotlib, doim ishlaydi) =====
+            # cairosvg/weasyprint/imgkit tizimda kerakli native kutubxona
+            # (libcairo, wkhtmltoimage va h.k.) topilmagani sabab ishlamasa,
+            # to'liq batafsil chizma o'rniga hech bo'lmasa o'lchamlar va
+            # eshik joyini ko'rsatuvchi sodda reja chizamiz - bu matplotlib
+            # bilan qilinadi, u hech qanday tashqi (native) kutubxonaga
+            # muhtoj emas, shuning uchun deyarli har doim ishlaydi.
             if not img_added:
                 try:
-                    import matplotlib.pyplot as plt
-                    import io
-                    from PIL import Image
-                    import xml.etree.ElementTree as ET
-                    
-                    # SVG ni vaqtinchalik faylga saqlash
-                    with tempfile.NamedTemporaryFile(suffix='.svg', delete=False, mode='w', encoding='utf-8') as tmp:
-                        tmp.write(svg_string)
-                        svg_path = tmp.name
-                    
-                    # Matplotlib orqali yuklash
-                    fig, ax = plt.subplots(figsize=(19, 13), dpi=100)
-                    ax.set_position([0, 0, 1, 1])
-                    ax.axis('off')
-                    
-                    # SVG ni o'qish va ko'rsatish (oddiy SVG uchun)
-                    try:
-                        import svgutils.transform as sg
-                        fig = sg.fromfile(svg_path)
-                        fig.save('temp.png')
-                        pdf.image('temp.png', x=10, w=190)
-                        os.unlink('temp.png')
-                        img_added = True
-                    except:
-                        plt.close()
-                    
-                    os.unlink(svg_path)
+                    plan_png = _draw_pdf_floor_plan(L, W, wall_mm, ej, ep, door_w_m)
+                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                        tmp.write(plan_png)
+                        tmp_path = tmp.name
+                    pdf.image(tmp_path, x=35, w=140)
+                    os.unlink(tmp_path)
+                    img_added = True
                     pdf.ln(2)
-                except ImportError:
-                    pass
+                    pdf.set_font('Helvetica', 'I', 8)
+                    pdf.set_text_color(120, 120, 120)
+                    pdf.cell(0, 5, "Sodda reja (batafsil chizma uchun 'Chizma SVG' tugmasidan foydalaning)", ln=True, align='C')
+                    pdf.set_text_color(0, 0, 0)
                 except Exception as e:
-                    print(f"matplotlib xatosi: {e}")
-            
-            # ===== USUL 5: SVG ni matn sifatida =====
+                    print(f"matplotlib reja xatosi: {e}")
+
+            # ===== USUL 5: hech biri ishlamadi - toza xabar =====
             if not img_added:
                 pdf.set_font('Helvetica', '', 9)
-                pdf.cell(0, 6, 'Chizma: SVG formatda', ln=True)
-                pdf.cell(0, 6, f'Chizma fayli: {room_code}_drawing.svg', ln=True)
-                pdf.cell(0, 6, f'Olcham: {L}x{W}x{H} m', ln=True)
-                pdf.cell(0, 6, f'Panellar: {total_panels} ta', ln=True)
-                
-                # SVG ning qisqa ko'rinishi
+                pdf.cell(0, 6, "Texnik chizma rasmga o'tkazilmadi (server sozlamasi).", ln=True)
+                pdf.cell(0, 6, f"To'liq chizmani '{room_code}_drawing.svg' fayli sifatida", ln=True)
+                pdf.cell(0, 6, "ilovadagi 'Chizma SVG' tugmasi orqali yuklab oling.", ln=True)
                 pdf.ln(2)
-                pdf.set_font('Helvetica', '', 5)
-                pdf.cell(0, 4, '--- SVG CHIZMA (qisqa) ---', ln=True)
-                lines = svg_string.split('\n')[:15]
-                for line in lines:
-                    if len(line) > 100:
-                        line = line[:100] + '...'
-                    pdf.cell(0, 3, line, ln=True)
-        
+                pdf.cell(0, 6, f"O'lcham: {L}x{W}x{H} m   |   Panellar: {total_panels} ta", ln=True)
+
+        # 3. XARAJATLAR HISOBOTI (agar narx ma'lumotlari berilgan bo'lsa)
+        if jami_xarajat is not None:
+            if pdf.get_y() > 230:
+                pdf.add_page()
+            pdf.ln(4)
+            section_title(pdf, '3. XARAJATLAR HISOBOTI')
+
+            cost_rows = [
+                ('Panel (devor+patalok+pol)', panel_jami),
+                ('Eshik', eshik_jami),
+                ('Agregat (kompressor)', agregat_jami),
+                ('Germitika', germitika_jami),
+                ("Qo'shimcha (transport, ishchi, material)", qoshimcha_jami),
+            ]
+            pdf.set_fill_color(234, 245, 230)
+            pdf.set_font('Helvetica', 'B', 9)
+            pdf.cell(130, 7, 'Xarajat turi', border=1, fill=True)
+            pdf.cell(60, 7, 'Summa ($)', border=1, fill=True, align='C')
+            pdf.ln()
+            pdf.set_font('Helvetica', '', 9)
+            for label, val in cost_rows:
+                if val is None:
+                    continue
+                pdf.cell(130, 6, label, border=1)
+                pdf.cell(60, 6, f'{val:,.0f}', border=1, align='C')
+                pdf.ln()
+
+            pdf.ln(3)
+            pdf.set_fill_color(47, 74, 40)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font('Helvetica', 'B', 12)
+            pdf.cell(130, 10, 'JAMI XARAJAT', border=0, fill=True, align='L')
+            pdf.cell(60, 10, f'$ {jami_xarajat:,.0f}', border=0, fill=True, align='C')
+            pdf.ln(10)
+            pdf.set_text_color(0, 0, 0)
+            if m2_narx:
+                pdf.set_font('Helvetica', 'I', 9)
+                pdf.cell(0, 6, f'1 m2 narxi: ${m2_narx:,.0f} / m2', ln=True)
+
         # Footer
         pdf.set_y(270)
+        pdf.set_draw_color(47, 74, 40)
+        pdf.set_line_width(0.5)
+        pdf.line(10, 268, 200, 268)
         pdf.set_font('Helvetica', 'I', 8)
-        pdf.set_text_color(128, 128, 128)
-        pdf.cell(0, 5, 'Constructor | Sovutish tizimlari loyihalash', align='C')
+        pdf.set_text_color(47, 74, 40)
+        pdf.cell(0, 5, 'EcoProm | High-Quality Sandwich Panels | Sovutish tizimlari loyihalash', align='C')
         
         pdf_output = pdf.output(dest='S')
         
@@ -5311,7 +4705,10 @@ def generate_pdf_report(project_name, room_code, L, W, H, wall_mm, ceil_mm, floo
         print(error_msg)
         import traceback
         traceback.print_exc()
-        return f"PDF yaratishda xatolik: {str(e)}".encode('utf-8')
+        # Xato matnini ".pdf" nomi bilan yuklab berish foydalanuvchini
+        # chalg'itadi (fayl ochilmaydi) - shuning uchun None qaytaramiz,
+        # chaqiruvchi buni ko'rib haqiqiy xatolik xabarini ko'rsatadi.
+        return None
 
 
 
@@ -5538,6 +4935,8 @@ def get_groq_recommendation(mahsulot_turi, saqlash_temp, ochilish_soni,
     yearly_kwh = daily_kwh * 365
     amper_380v = (best_kw * 1000) / (380 * 1.73 * 0.85) if best_kw > 0 else 0
     amper_220v = (best_kw * 1000) / 220 if best_kw > 0 else 0
+    pol_qatori = (f"{product_info['pol_mm']}mm PUR panel ({pol_panellar} ta)"
+                  if pol_bor else "Izolyatsiyasiz")
 
     result_data = {
         "mahsulot": mahsulot_turi,
@@ -5617,7 +5016,7 @@ def get_groq_recommendation(mahsulot_turi, saqlash_temp, ochilish_soni,
             f"KONSTRUKSIYA:\n"
             f"Devor: {product_info['devor_mm']}mm PUR panel ({devor_panellar} ta)\n"
             f"Patalok: {product_info['patalok_mm']}mm PUR panel ({patalok_panellar} ta)\n"
-            f"Pol: {product_info['pol_mm']}mm PUR panel ({pol_panellar} ta) if pol_bor else 'Izolyatsiyasiz'\n"
+            f"Pol: {pol_qatori}\n"
             f"Jami: {jami_panellar} ta panel ({panel_width_m}m enli)\n\n"
             f"MUHIM: {product_info['eslatma']}"
         )
@@ -5697,16 +5096,24 @@ def svg_to_html_bytes(svg_string):
 # SIDEBAR
 # SIDEBAR
 with st.sidebar:
-    st.markdown("## Control Panel")
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    
+    _logo_path = Path(__file__).parent / "assets" / "ecoprom_icon.png"
+    if _logo_path.exists():
+        col_logo, col_title = st.columns([1, 3])
+        with col_logo:
+            st.image(str(_logo_path))
+        with col_title:
+            st.markdown("## Control Panel")
+    else:
+        st.markdown("## Control Panel")
+    st.markdown("<div class='card'><b>Rejim</b>", unsafe_allow_html=True)
+
     # Asosiy rejim tanlash
     main_mode = st.radio("Asosiy rejim", ["Sovutish tizimi", "Qurilish"], key="main_mode")
-    st.markdown("</div>", unsafe_allow_html=True)
-    
     if main_mode == "Sovutish tizimi":
         mode = st.radio("Kamera rejimi", ["Yagona kamera", "Multi-kamera"], key="mode")
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if main_mode == "Sovutish tizimi":
         if mode == "Yagona kamera":
             st.markdown("<div class='card'><b>Olchamlar</b>", unsafe_allow_html=True)
             st.text_input("Uzunlik (m)", key="L_text", on_change=save_form_data)
@@ -5732,17 +5139,11 @@ with st.sidebar:
 
             st.markdown("<div class='card'><b>Eshik va agregat</b>", unsafe_allow_html=True)
 
-            eshik_turi = st.selectbox("Eshik turi", eshik_opts, key="eshik", on_change=save_form_data)
-
-            # Custom eshik o'lchamlari
-            if eshik_turi == "Custom":
-                col_w, col_h = st.columns(2)
-                with col_w:
-                    st.number_input("Eshik kengligi (mm)", 600, 2000, 900, 50, key="eshik_custom_width", on_change=save_form_data)
-                with col_h:
-                    st.number_input("Eshik balandligi (mm)", 1500, 3000, 1900, 50, key="eshik_custom_height", on_change=save_form_data)
-                
-                st.number_input("Eshik soni", 1, 10, 1, key="eshik_soni", on_change=save_form_data)
+            eshik_turi = st.selectbox("Eshik turi", eshik_opts, key="eshik", on_change=save_form_data,
+                                       format_func=lambda k: door_catalog_label(k) if k != "Yo'q" else "Yo'q")
+            if eshik_turi in DOOR_CATALOG:
+                _d = DOOR_CATALOG[eshik_turi]
+                st.caption(f"{_d['desc']} | {_d['w']}x{_d['h']}x{_d['thickness']} mm")
 
             st.radio("Eshik joyi", eshik_joyi_opts, key="eshik_joyi", on_change=save_form_data)
             
@@ -5888,9 +5289,18 @@ with st.sidebar:
             
             st.markdown("---")
             
-            st.selectbox("Agregat turi", agregat_opts, key="agregat", on_change=save_form_data)
-            st.radio("Agregat joyi", ag_joyi_opts, key="agregat_joyi", on_change=save_form_data)
-            st.selectbox("Brend", ag_brand_opts, key="ag_brand")
+            st.selectbox("Agregat turi", agregat_opts, key="agregat", on_change=save_form_data,
+                          format_func=lambda k: agregat_catalog_label(k) if k != "Yo'q" else "Yo'q")
+            if st.session_state.get("agregat") in AGREGAT_CATALOG:
+                _ag = AGREGAT_CATALOG[st.session_state["agregat"]]
+                st.caption(f"{_ag['brand']} | {_ag['hp']} HP ({_ag['regime']}) | "
+                           f"Isparitel {_ag['evap_model']}"
+                           + (f", Kondensator {_ag['cond_model']}" if _ag['cond_model'] else "")
+                           + f" | Narxi: ${_ag['total_price']:,}")
+            st.radio("Agregat joyi (tashqi blok)", ag_joyi_opts, key="agregat_joyi", on_change=save_form_data,
+                      help="Kompressor/kondensator bloki kamera tashqarisida qaysi devor tomonida turishi")
+            st.radio("Ichki blok (sovutgich) joyi", eshik_joyi_opts, key="evaporator_joyi", on_change=save_form_data,
+                      help="Kamera ICHIDAGI sovutgich (evaporator) qaysi devorga o'rnatilishi va shamolni qaysi tomonga puflashi - eshik joyidan mustaqil tanlanadi")
             st.markdown("</div>", unsafe_allow_html=True)
 
             st.markdown("<div class='card'><b>3D sozlama</b>", unsafe_allow_html=True)
@@ -5910,6 +5320,9 @@ with st.sidebar:
             with col_m3:
                 pol_narx = st.number_input("Pol paneli ($/m²)", min_value=0.0, max_value=500.0, value=40.0, step=5.0, key="pol_narx", on_change=save_form_data)
 
+            beton_pol_narx = st.number_input("Beton pol xizmati ($/m²)", min_value=0.0, max_value=500.0, value=15.0, step=1.0, key="beton_pol_narx", on_change=save_form_data,
+                                              help="Pol materiali 'Beton' tanlanganda ishlatiladi - pol maydoniga (m²) ko'paytiriladi")
+
             st.markdown("---")
 
             # Eshik narxi
@@ -5923,15 +5336,28 @@ with st.sidebar:
 
             st.markdown("---")
 
-            # Agregat narxi
+            # Agregat narxi - katalogdan avtomatik olinadi (endi qo'lda kiritilmaydi)
             st.markdown("####  Agregat (Kompressor)")
+            _sel_agregat = st.session_state.get("agregat", "Yo'q")
+            agregat_narx = float(AGREGAT_CATALOG[_sel_agregat]["total_price"]) if _sel_agregat in AGREGAT_CATALOG else 0.0
+            st.session_state["agregat_narx"] = agregat_narx
             col_a1, col_a2, col_a3 = st.columns(3)
             with col_a1:
-                agregat_narx = st.number_input("Agregat narxi ($/dona)", min_value=0.0, max_value=20000.0, value=2500.0, step=100.0, key="agregat_narx", on_change=save_form_data)
+                st.metric("Agregat narxi", f"${agregat_narx:,.0f}", help="Katalogdagi agregat turiga qarab avtomatik hisoblanadi")
             with col_a2:
                 agregat_ornatish = st.number_input("Agregat o'rnatish ($)", min_value=0.0, max_value=5000.0, value=300.0, step=50.0, key="agregat_ornatish", on_change=save_form_data)
             with col_a3:
                 agregat_soni = st.number_input("Agregat soni", min_value=0, max_value=5, value=1, key="agregat_soni", on_change=save_form_data)
+
+            st.markdown("---")
+
+            # Germitika narxi
+            st.markdown("####  Germitika")
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                germitika_narx = st.number_input("Germitika narxi ($/dona)", min_value=0.0, max_value=500.0, value=5.0, step=0.5, key="germitika_narx", on_change=save_form_data)
+            with col_g2:
+                st.caption("Miqdor umumiy maydonga qarab avtomatik hisoblanadi (50 m² = 22 dona)")
 
             st.markdown("---")
 
@@ -5959,7 +5385,7 @@ with st.sidebar:
                 panel_width = float(st.session_state.get("panel_width_m", 1.16))
                 
                 # Panel miqdorlari
-                wall_panels = (math.ceil(L/panel_width) * 2 + math.ceil(W/panel_width) * 2) * 2
+                wall_panels = math.ceil(L/panel_width) * 2 + math.ceil(W/panel_width) * 2
                 ceiling_panels = math.ceil(L/panel_width) * math.ceil(W/panel_width)
                 floor_panels = ceiling_panels if st.session_state.get("pol_bor", False) else 0
                 
@@ -6041,15 +5467,19 @@ with st.sidebar:
 
             st.markdown("<div class='card'><b>Qurilish</b>", unsafe_allow_html=True)
             wall_mm_multi  = st.selectbox("Devor qalinligi (mm)", [80,100,120,150], index=1, key="wall_mm_multi")
-            door_w_multi   = st.number_input("Eshik kengligi (m)", 0.6, 2.5, 0.96, 0.02, key="door_w_multi")
-            door_h_multi   = st.number_input("Eshik balandligi (m)", 1.6, 3.5, 2.1, 0.1, key="door_h_multi")
+            eshik_turi_multi = st.selectbox("Eshik turi", list(DOOR_CATALOG.keys()), key="eshik_turi_multi",
+                                             format_func=door_catalog_label)
+            _dm = DOOR_CATALOG[eshik_turi_multi]
+            st.caption(f"{_dm['desc']} | {_dm['w']}x{_dm['h']}x{_dm['thickness']} mm")
+            door_w_multi = _dm["w"] / 1000.0
+            door_h_multi = _dm["h"] / 1000.0
             st.markdown("</div>", unsafe_allow_html=True)
 
             st.markdown("<div class='card'><b>Pol va izolyatsiya</b>", unsafe_allow_html=True)
             multi_pol_bor = st.toggle("Pol izolyatsiyasi", value=True, key="multi_pol_bor")
             if multi_pol_bor:
                 multi_pol_material = st.selectbox("Pol materiali", pol_material_opts, key="multi_pol_material")
-                if multi_pol_material == " panel":
+                if multi_pol_material == "PUR panel":
                     multi_pol_qalin = st.selectbox("Pol qalinligi", pol_qalin_opts, key="multi_pol_qalin")
                     multi_beton_qalinligi_mm = None
                 else:
@@ -6057,7 +5487,7 @@ with st.sidebar:
                     st.caption("Beton M250 markasi tavsiya etiladi")
                     multi_pol_qalin = f"{multi_beton_qalinligi_mm}mm"
             else:
-                multi_pol_material = " panel"
+                multi_pol_material = "PUR panel"
                 multi_pol_qalin = "0mm"
                 multi_beton_qalinligi_mm = None
             st.markdown("</div>", unsafe_allow_html=True)
@@ -6084,8 +5514,17 @@ with st.sidebar:
             st.error("Qurilish moduli mavjud emas! Iltimos, construction_module.py faylini tekshiring.")
 
 # MAIN AREA
-st.title("Constructor")
-st.write("Sovutish tizimlari va Qurilish konstruksiyalari loyihalash | 3D Vizualizatsiya | Materiallar hisobi")
+_main_logo_path = Path(__file__).parent / "assets" / "ecoprom_logo.png"
+if _main_logo_path.exists():
+    col_ml1, col_ml2 = st.columns([1, 6])
+    with col_ml1:
+        st.image(str(_main_logo_path))
+    with col_ml2:
+        st.title("Constructor")
+        st.write("Sovutish tizimlari va Qurilish konstruksiyalari loyihalash | 3D Vizualizatsiya | Materiallar hisobi")
+else:
+    st.title("Constructor")
+    st.write("Sovutish tizimlari va Qurilish konstruksiyalari loyihalash | 3D Vizualizatsiya | Materiallar hisobi")
 
 st.divider()
 # Rejimga qarab korsatish
@@ -6191,9 +5630,10 @@ else:
         eo           = st.session_state["eshik_ochilish"]
         agregat      = st.session_state["agregat"]
         aj           = st.session_state["agregat_joyi"]
+        evj          = st.session_state.get("evaporator_joyi", "Orqa")
         project_name = st.session_state["project_name"]
         room_code    = st.session_state["room_code"]
-        ag_brand     = st.session_state["ag_brand"]
+        ag_brand     = AGREGAT_CATALOG[agregat]["brand"] if agregat in AGREGAT_CATALOG else "Ecoprom"
         montaj       = st.session_state["montaj_progress"]
         lbl3d        = st.session_state["show_3d_labels"]
 
@@ -6235,7 +5675,7 @@ else:
         tm = seg_meta(tp, has_door=(eshik!="Yo'q" and ej in ["Old","Orqa"]), door_sz=door_dim(eshik)[0])
         rm = seg_meta(rp, has_door=(eshik!="Yo'q" and ej in ["Chap","O'ng"]), door_sz=door_dim(eshik)[0])
 
-        comp_info = f"Kompressor: {ag_brand} ({agregat}) -> {aj} tomonga" if agregat != "Yo'q" else "Agregat: Yoq"
+        comp_info = f"Kompressor: {agregat_catalog_label(agregat)} -> {aj} tomonga" if agregat != "Yo'q" else "Agregat: Yoq"
         st.markdown(
             f'<span class="badge">Material: {d_turi}</span>'
             f'<span class="badge">Devor: {d_qalin}</span>'
@@ -6247,7 +5687,7 @@ else:
         st.subheader("1. 3D Vizualizatsiya")
         
         html_3d = build_3d_single(L, W, H, wall_mm, pol_bor, eshik, ej, ep,
-                                agregat, aj, ag_brand, montaj, lbl3d)
+                                agregat, aj, ag_brand, montaj, lbl3d, evj=evj)
         components.html(html_3d, height=700, scrolling=True)
         
         devor_narx_sidebar = st.session_state.get("devor_narx", 35.0)
@@ -6273,31 +5713,31 @@ else:
         col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
-            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                 <div class="metric-title"><i class="fas fa-cubes"></i> JAMI PANELLAR</div>
                 <div class="metric-value">{all_p} ta</div>
             </div>""", unsafe_allow_html=True)
         
         with col2:
-            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                 <div class="metric-title"><i class="fas fa-border-all"></i> DEVOR PANELLARI</div>
                 <div class="metric-value">{dp} ta</div>
             </div>""", unsafe_allow_html=True)
         
         with col3:
-            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                 <div class="metric-title"><i class="fas fa-home"></i> PATALOK PANELLARI</div>
                 <div class="metric-value">{pp} ta</div>
             </div>""", unsafe_allow_html=True)
         
         with col4:
-            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                 <div class="metric-title"><i class="fas fa-chalkboard"></i> POL PANELLARI</div>
                 <div class="metric-value">{flp} ta</div>
             </div>""", unsafe_allow_html=True)
         
         with col5:
-            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                 <div class="metric-title"><i class="fas fa-door-open"></i> ESHIK</div>
                 <div class="metric-value">{'1 ta' if eshik != "Yo'q" else "Yo'q"}</div>
             </div>""", unsafe_allow_html=True)
@@ -6337,7 +5777,8 @@ else:
                         <div class="metric-value">{beton_materials['gravel_m3']} m³</div>
                     </div>""", unsafe_allow_html=True)
             
-            st.caption(f"🏗️ Beton sinfi: M250 | Taxminiy narx: ~{beton_cost} birlik (material + ishchi)")
+            _beton_pol_narx_disp = st.session_state.get("beton_pol_narx", 15.0)
+            st.caption(f"🏗️ Beton sinfi: M250 | Xomashyo (sement/qum/shag'al) taxminiy tannarxi: ${beton_cost:,.0f} - bu ishchi kuchisiz, faqat xomashyo narxi. 'Xarajatlar hisoboti' bo'limidagi Pol narxi (${_beton_pol_narx_disp:,.2f}/m²) - to'liq xizmat (material+montaj) narxi.")
         # ============================================================
         # ========== XARAJATLAR HISOBOTI (GERMITIKA OSTIDA) ==========
         # ============================================================
@@ -6353,31 +5794,47 @@ else:
         agregat_narx = st.session_state.get("agregat_narx", 2500.0)
         agregat_ornatish = st.session_state.get("agregat_ornatish", 300.0)
         agregat_soni = st.session_state.get("agregat_soni", 1)
+        germitika_narx = st.session_state.get("germitika_narx", 5.0)
         transport_narx = st.session_state.get("transport_narx", 200.0)
         montaj_ishchi = st.session_state.get("montaj_ishchi", 500.0)
         qoshimcha_material = st.session_state.get("qoshimcha_material", 150.0)
 
         if L and W and H:
             panel_width = float(st.session_state.get("panel_width_m", 1.16))
-            
+            beton_pol_narx = st.session_state.get("beton_pol_narx", 15.0)
+
             # Panel miqdorlari
-            wall_panels = (math.ceil(L/panel_width) * 2 + math.ceil(W/panel_width) * 2) * 2
+            wall_panels = math.ceil(L/panel_width) * 2 + math.ceil(W/panel_width) * 2
             ceiling_panels = math.ceil(L/panel_width) * math.ceil(W/panel_width)
-            floor_panels = ceiling_panels if st.session_state.get("pol_bor", False) else 0
-            
+            _pol_bor_cost = st.session_state.get("pol_bor", False)
+            _pol_material_cost = st.session_state.get("pol_material", "PUR panel")
+            floor_panels = ceiling_panels if (_pol_bor_cost and _pol_material_cost == "PUR panel") else 0
+
             panel_area = panel_width * 1.0
-            
+
             # Narxlar
             devor_cost = wall_panels * panel_area * devor_narx
             patalok_cost = ceiling_panels * panel_area * patalok_narx
-            pol_cost = floor_panels * panel_area * pol_narx
+            # Pol: PUR panel bo'lsa panel narxi bo'yicha, Beton bo'lsa pol
+            # maydoniga (m²) qarab alohida beton pol xizmati narxi bo'yicha
+            # hisoblanadi - ikkisi butunlay boshqa xizmat turi.
+            if _pol_bor_cost and _pol_material_cost == "Beton":
+                pol_cost = L * W * beton_pol_narx
+            else:
+                pol_cost = floor_panels * panel_area * pol_narx
             panel_jami = devor_cost + patalok_cost + pol_cost
-            
+
             eshik_jami = (eshik_narx + eshik_ornatish) * eshik_soni_input
             agregat_jami = (agregat_narx + agregat_ornatish) * agregat_soni
+            # Germitika pol maydoniga emas, JAMI maydonga (devor+patalok+pol)
+            # nisbatan hisoblanadi - "total_area" pastda (hajm/maydon
+            # bo'limida) xuddi shu formula bilan allaqachon hisoblangan.
+            germitika_hisob = calculate_germitika(total_area)
+            germitika_soni = germitika_hisob["germitika_soni"]
+            germitika_jami = germitika_soni * germitika_narx
             qoshimcha_jami = transport_narx + montaj_ishchi + qoshimcha_material
-            
-            jami = panel_jami + eshik_jami + agregat_jami + qoshimcha_jami
+
+            jami = panel_jami + eshik_jami + agregat_jami + germitika_jami + qoshimcha_jami
             m2_narx = jami / (L * W) if L * W > 0 else 0
             
             # ===== KICHIK VA IXCHAM XARAJATLAR KARTALARI =====
@@ -6385,7 +5842,7 @@ else:
             <style>
             .cost-grid {
                 display: grid;
-                grid-template-columns: repeat(4, 1fr);
+                grid-template-columns: repeat(5, 1fr);
                 gap: 10px;
                 margin: 10px 0;
             }
@@ -6405,7 +5862,7 @@ else:
             .cost-item .value {
                 font-size: 20px;
                 font-weight: 700;
-                color: #0f172a;
+                color: #2F4A28;
                 margin-top: 2px;
             }
             .cost-item .sub {
@@ -6414,7 +5871,7 @@ else:
                 margin-top: 2px;
             }
             .cost-total {
-                background: linear-gradient(135deg, #0f172a, #1e293b);
+                background: linear-gradient(135deg, #2F4A28, #3E6F2E);
                 border-radius: 10px;
                 padding: 16px 20px;
                 text-align: center;
@@ -6459,10 +5916,25 @@ else:
             # 4 ta karta
             st.markdown(f"""
            <div class="cost-grid">
+                <div class="cost-item" style="border-top: 3px solid #2F4A28;">
+                    <div class="label">Panel</div>
+                    <div class="value">${panel_jami:,.0f}</div>
+                    <div class="sub">Devor+Patalok+Pol</div>
+                </div>
+                <div class="cost-item" style="border-top: 3px solid #dc2626;">
+                    <div class="label">Eshik</div>
+                    <div class="value">${eshik_jami:,.0f}</div>
+                    <div class="sub">{eshik_soni_input} ta × ${eshik_narx + eshik_ornatish:,.0f}</div>
+                </div>
                 <div class="cost-item" style="border-top: 3px solid #2563eb;">
                     <div class="label">Agregat</div>
                     <div class="value">${agregat_jami:,.0f}</div>
                     <div class="sub">{agregat_soni} ta × ${agregat_narx + agregat_ornatish:,.0f}</div>
+                </div>
+                <div class="cost-item" style="border-top: 3px solid #16a34a;">
+                    <div class="label">Germitika</div>
+                    <div class="value">${germitika_jami:,.0f}</div>
+                    <div class="sub">{germitika_soni} ta × ${germitika_narx:,.2f}</div>
                 </div>
                 <div class="cost-item" style="border-top: 3px solid #f59e0b;">
                     <div class="label">Qo'shimcha</div>
@@ -6471,9 +5943,23 @@ else:
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            
+
             # Jami xarajat
-            
+            st.markdown(f"""
+            <div class="cost-total">
+                <div class="label">Jami xarajat</div>
+                <div class="value">${jami:,.0f}</div>
+                <div class="sub">1 m² narxi: <span>${m2_narx:,.0f}</span> / m² &middot; Jami panellar: <span>{wall_panels + ceiling_panels + floor_panels}</span> ta</div>
+                <div class="cost-breakdown">
+                    <span>Panel: <b>${panel_jami:,.0f}</b></span>
+                    <span>Eshik: <b>${eshik_jami:,.0f}</b></span>
+                    <span>Agregat: <b>${agregat_jami:,.0f}</b></span>
+                    <span>Germitika: <b>${germitika_jami:,.0f}</b></span>
+                    <span>Qo'shimcha: <b>${qoshimcha_jami:,.0f}</b></span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
             # ===== O'RNATISH NARXLARI (KICHIK) =====
             st.markdown("""
             <style>
@@ -6499,7 +5985,7 @@ else:
             .install-item .value {
                 font-size: 16px;
                 font-weight: 700;
-                color: #0f172a;
+                color: #2F4A28;
             }
             .install-item .sub {
                 font-size: 9px;
@@ -6531,33 +6017,42 @@ else:
         else:
             st.info("Kamera o'lchamlarini kiriting")
         st.subheader("4. Germitika hisobi")
-        
-        germitika_maydoni_yagona = L * W
+
+        germitika_maydoni_yagona = total_area
         germitika_yagona = calculate_germitika(germitika_maydoni_yagona)
-        
+        germitika_narx_disp = st.session_state.get("germitika_narx", 5.0)
+        germitika_jami_disp = germitika_yagona["germitika_soni"] * germitika_narx_disp
+
         col_g1, col_g2, col_g3, col_g4 = st.columns(4)
-        
+
         with col_g1:
             st.markdown(f"""<div class="metric-box" style="background:#f0fdf4; border-top:4px solid #16a34a;">
                 <div class="metric-title"><i class="fas fa-fill-drip"></i>  GERMITIKA</div>
                 <div class="metric-value">{germitika_yagona['germitika_soni']} ta</div>
                 <div style="font-size:10px;">umumiy soni</div>
             </div>""", unsafe_allow_html=True)
-        
+
         with col_g2:
             st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #3b82f6;">
                 <div class="metric-title"><i class="fas fa-calculator"></i>  HISOB</div>
                 <div class="metric-value">{germitika_maydoni_yagona:.1f} m²</div>
-                <div style="font-size:9px;">Pol maydoni</div>
+                <div style="font-size:9px;">Jami maydon (devor+patalok+pol)</div>
             </div>""", unsafe_allow_html=True)
-        
+
         with col_g3:
             st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #8b5cf6;">
                 <div class="metric-title"><i class="fas fa-info-circle"></i>  ASOS</div>
-                <div class="metric-value">50 m² = 24 ta</div>
+                <div class="metric-value">50 m² = 22 ta</div>
                 <div style="font-size:9px;">Standart me'yor</div>
             </div>""", unsafe_allow_html=True)
-        
+
+        with col_g4:
+            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #16a34a;">
+                <div class="metric-title"><i class="fas fa-dollar-sign"></i>  NARXI</div>
+                <div class="metric-value">${germitika_jami_disp:,.0f}</div>
+                <div style="font-size:9px;">{germitika_yagona['germitika_soni']} ta × ${germitika_narx_disp:,.2f}</div>
+            </div>""", unsafe_allow_html=True)
+
         st.caption(f" {germitika_yagona['hisob_metodi']} ")
         
         mdata = [("Tashqi hajm",f"{hajm} m3"),("Ichki hajm",f"{inner_hajm} m3"),
@@ -6609,18 +6104,42 @@ else:
                         inner_hajm=inner_hajm,
                         total_area=total_area,
                         fig_3d=None,  # 3D figura bo'lmasa None
-                        svg_string=sheet_svg  # SVG chizma
+                        svg_string=sheet_svg,  # SVG chizma
+                        ej=ej if eshik != "Yo'q" else None,
+                        ep=ep,
+                        door_w_m=(door_dim(eshik)[0] / 1000.0) if eshik != "Yo'q" else None,
+                        door_h_m=(door_dim(eshik)[1] / 1000.0) if eshik != "Yo'q" else None,
+                        panel_jami=panel_jami,
+                        eshik_jami=eshik_jami,
+                        agregat_jami=agregat_jami,
+                        germitika_jami=germitika_jami,
+                        qoshimcha_jami=qoshimcha_jami,
+                        jami_xarajat=jami,
+                        m2_narx=m2_narx,
                     )
                     
-                    st.download_button(
-                        "📥 PDF Yuklab olish",
-                        data=pdf_bytes,
-                        file_name=f"{room_code}_report.pdf",
-                        mime="application/pdf"
-                    )
+                    if pdf_bytes:
+                        st.session_state["pdf_bytes_single"] = pdf_bytes
+                        st.session_state["pdf_filename_single"] = f"{room_code}_report.pdf"
+                    else:
+                        st.session_state["pdf_bytes_single"] = None
+                        st.error("PDF yaratib bo'lmadi. Loyiha nomi/kodida faqat lotin harflari va raqamlardan foydalanib qayta urinib ko'ring.")
                 except Exception as e:
+                    st.session_state["pdf_bytes_single"] = None
                     st.error(f"PDF yaratishda xatolik: {e}")
                     st.exception(e)
+
+            # Tugma "if" blokidan tashqarida - shu bilan yuklab olish tugmasi
+            # bosilgach (streamlit qayta ishga tushganda) yo'qolib qolmaydi,
+            # session_state'da saqlangan PDF doim ko'rinib turadi.
+            if st.session_state.get("pdf_bytes_single"):
+                st.download_button(
+                    "📥 PDF Yuklab olish",
+                    data=st.session_state["pdf_bytes_single"],
+                    file_name=st.session_state.get("pdf_filename_single", "report.pdf"),
+                    mime="application/pdf",
+                    key="dl_pdf_single"
+                )
        
       
 
@@ -6654,7 +6173,7 @@ else:
             door_w_multi, door_h_multi,
             n_total_arg=n_chambers,
             comp_brand=comp_brand_m, comp_type=comp_type_m,
-            comp_joyi=comp_joyi_m)
+            comp_joyi=comp_joyi_m, eshik_turi=eshik_turi_multi)
         components.html(html_3d, height=750, scrolling=True)
 
         n_comp_units = n_chambers
@@ -6700,31 +6219,31 @@ else:
         # ASOSIY PANELLAR KARTALARI
         col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
-            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                 <div class="metric-title"><i class="fas fa-cubes"></i> JAMI PANELLAR</div>
                 <div class="metric-value">{panel_stats['total_panels']} ta</div>
                 <div style="font-size:11px; color:#666;">Asosiy panellar</div>
             </div>""", unsafe_allow_html=True)
         with col2:
-            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                 <div class="metric-title"><i class="fas fa-border-all"></i> DEVOR PANELLARI</div>
                 <div class="metric-value">{panel_stats['wall_panels']} ta</div>
                 <div>{panel_stats['total_area']['walls']:.1f} m²</div>
             </div>""", unsafe_allow_html=True)
         with col3:
-            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                 <div class="metric-title"><i class="fas fa-home"></i> PATALOK PANELLARI</div>
                 <div class="metric-value">{panel_stats['ceiling_panels']} ta</div>
                 <div>{panel_stats['total_area']['ceiling']:.1f} m²</div>
             </div>""", unsafe_allow_html=True)
         with col4:
-            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                 <div class="metric-title"><i class="fas fa-chalkboard"></i> POL PANELLARI</div>
                 <div class="metric-value">{panel_stats['floor_panels']} ta</div>
                 <div>{panel_stats['total_area']['floor']:.1f} m²</div>
             </div>""", unsafe_allow_html=True)
         with col5:
-            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                 <div class="metric-title"><i class="fas fa-door-open"></i> ESHIKLAR SONI</div>
                 <div class="metric-value">{eshiklar_soni} ta</div>
                 <div style="font-size:11px;">{n_chambers} ta kamera</div>
@@ -6769,7 +6288,8 @@ else:
             
             beton_volume_multi = concrete['volume_m3']
             beton_cost_multi = calculate_beton_cost(beton_volume_multi)
-            st.caption(f"🏗️ Beton sinfi: M250 | Taxminiy narx: ~{beton_cost_multi} birlik (material + ishchi)")
+            _beton_pol_narx_disp = st.session_state.get("beton_pol_narx", 15.0)
+            st.caption(f"🏗️ Beton sinfi: M250 | Xomashyo (sement/qum/shag'al) taxminiy tannarxi: ${beton_cost_multi:,.0f} - bu ishchi kuchisiz, faqat xomashyo narxi. 'Xarajatlar hisoboti' bo'limidagi Pol narxi (${_beton_pol_narx_disp:,.2f}/m²) - to'liq xizmat (material+montaj) narxi.")
         
         # Qo'shimcha tom elementlari
         if 'roof_extra' in panel_stats:
@@ -6780,21 +6300,21 @@ else:
             
             col_r1, col_r2, col_r3 = st.columns(3)
             with col_r1:
-                st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+                st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                     <div class="metric-title"><i class="fas fa-chart-line"></i> UCHBURCHAK YON DEVORLAR</div>
                     <div class="metric-value">{re['gable_walls']['panels']} ta</div>
                     <div>{re['gable_walls']['area_m2']} m²</div>
                 </div>""", unsafe_allow_html=True)
             
             with col_r2:
-                st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+                st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                     <div class="metric-title"><i class="fas fa-mountain"></i> TIZMA PANELI</div>
                     <div class="metric-value">{re['ridge_cap']['panels']} ta</div>
                     <div>{re['ridge_cap']['area_m2']} m²</div>
                 </div>""", unsafe_allow_html=True)
             
             with col_r3:
-                st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+                st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                     <div class="metric-title"><i class="fas fa-ribbon"></i> FASCA PANELLARI</div>
                     <div class="metric-value">{re['fascia']['panels']} ta</div>
                     <div>{re['fascia']['area_m2']} m²</div>
@@ -6837,39 +6357,59 @@ else:
         agregat_narx = st.session_state.get("agregat_narx", 2500.0)
         agregat_ornatish = st.session_state.get("agregat_ornatish", 300.0)
         agregat_soni = st.session_state.get("agregat_soni", 1)
+        germitika_narx = st.session_state.get("germitika_narx", 5.0)
         transport_narx = st.session_state.get("transport_narx", 200.0)
         montaj_ishchi = st.session_state.get("montaj_ishchi", 500.0)
         qoshimcha_material = st.session_state.get("qoshimcha_material", 150.0)
 
-        if L and W and H:
+        if multi_L and multi_W:
             panel_width = float(st.session_state.get("panel_width_m", 1.16))
-            
-            # Panel miqdorlari
-            wall_panels = (math.ceil(L/panel_width) * 2 + math.ceil(W/panel_width) * 2) * 2
-            ceiling_panels = math.ceil(L/panel_width) * math.ceil(W/panel_width)
-            floor_panels = ceiling_panels if st.session_state.get("pol_bor", False) else 0
-            
+            beton_pol_narx = st.session_state.get("beton_pol_narx", 15.0)
+
+            # Panel miqdorlari - allaqachon calculate_multi_panels() orqali
+            # to'g'ri (ko'p kamera, ichki devorlar va yo'lakni hisobga olib)
+            # hisoblangan panel_stats'dan olinadi - L/W/H bu yerda hech
+            # qachon aniqlanmagan edi (NameError'ga sabab bo'lardi).
+            wall_panels = panel_stats["wall_panels"]
+            ceiling_panels = panel_stats["ceiling_panels"]
+            floor_panels = panel_stats["floor_panels"]
+
             panel_area = panel_width * 1.0
-            
+
             # Narxlar
             devor_cost = wall_panels * panel_area * devor_narx
             patalok_cost = ceiling_panels * panel_area * patalok_narx
-            pol_cost = floor_panels * panel_area * pol_narx
+            # Pol: PUR panel bo'lsa panel narxi bo'yicha (floor_panels
+            # calculate_multi_panels() ichida Beton uchun 0 bo'ladi), Beton
+            # bo'lsa butun bino tagi maydoniga (m²) qarab alohida beton pol
+            # xizmati narxi bo'yicha hisoblanadi.
+            if multi_pol_bor and multi_pol_material == "Beton":
+                pol_cost = multi_L * multi_W * beton_pol_narx
+            else:
+                pol_cost = floor_panels * panel_area * pol_narx
             panel_jami = devor_cost + patalok_cost + pol_cost
             
             eshik_jami = (eshik_narx + eshik_ornatish) * eshik_soni_input
             agregat_jami = (agregat_narx + agregat_ornatish) * agregat_soni
+            # Germitika pol maydoniga emas, JAMI maydonga (devor+patalok+pol)
+            # nisbatan hisoblanadi.
+            germitika_maydoni_multi_calc = (panel_stats["total_area"]["walls"]
+                                             + panel_stats["total_area"]["ceiling"]
+                                             + panel_stats["total_area"]["floor"])
+            germitika_hisob = calculate_germitika(germitika_maydoni_multi_calc)
+            germitika_soni = germitika_hisob["germitika_soni"]
+            germitika_jami = germitika_soni * germitika_narx
             qoshimcha_jami = transport_narx + montaj_ishchi + qoshimcha_material
-            
-            jami = panel_jami + eshik_jami + agregat_jami + qoshimcha_jami
-            m2_narx = jami / (L * W) if L * W > 0 else 0
-            
+
+            jami = panel_jami + eshik_jami + agregat_jami + germitika_jami + qoshimcha_jami
+            m2_narx = jami / (multi_L * multi_W) if multi_L * multi_W > 0 else 0
+
             # ===== XARAJATLAR KARTALARI =====
-            col_x1, col_x2, col_x3, col_x4 = st.columns(4)
+            col_x1, col_x2, col_x3, col_x4, col_x5 = st.columns(5)
             
             with col_x1:
                 st.markdown(f"""
-                <div class="metric-box" style="background:#f8fafc; border-top:4px solid #0f172a;">
+                <div class="metric-box" style="background:#f8fafc; border-top:4px solid #2F4A28;">
                     <div class="metric-title">PANEL NARXI</div>
                     <div class="metric-value">${panel_jami:,.0f}</div>
                     <div style="font-size:10px;">Devor: ${devor_cost:,.0f}</div>
@@ -6898,6 +6438,15 @@ else:
             
             with col_x4:
                 st.markdown(f"""
+                <div class="metric-box" style="background:#f8fafc; border-top:4px solid #16a34a;">
+                    <div class="metric-title">GERMITIKA</div>
+                    <div class="metric-value">${germitika_jami:,.0f}</div>
+                    <div style="font-size:10px;">{germitika_soni} ta × ${germitika_narx:,.2f}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col_x5:
+                st.markdown(f"""
                 <div class="metric-box" style="background:#f8fafc; border-top:4px solid #f59e0b;">
                     <div class="metric-title">QO'SHIMCHA</div>
                     <div class="metric-value">${qoshimcha_jami:,.0f}</div>
@@ -6906,10 +6455,10 @@ else:
                     <div style="font-size:10px;">Material: ${qoshimcha_material:,.0f}</div>
                 </div>
                 """, unsafe_allow_html=True)
-            
+
             # ===== JAMI XARAJAT =====
             st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); 
+            <div style="background: linear-gradient(135deg, #2F4A28 0%, #3E6F2E 100%);
                         padding: 25px; border-radius: 15px; text-align: center; color: white; margin-top: 15px;">
                 <h3 style="margin: 0; color: #fbbf24;">JAMI XARAJAT</h3>
                 <p style="font-size: 42px; font-weight: bold; margin: 10px 0; color: #fbbf24;">${jami:,.0f}</p>
@@ -6918,6 +6467,7 @@ else:
                     <span>Panel: <b>${panel_jami:,.0f}</b></span>
                     <span>Eshik: <b>${eshik_jami:,.0f}</b></span>
                     <span>Agregat: <b>${agregat_jami:,.0f}</b></span>
+                    <span>Germitika: <b>${germitika_jami:,.0f}</b></span>
                     <span>Qo'shimcha: <b>${qoshimcha_jami:,.0f}</b></span>
                 </div>
                 <p style="margin: 10px 0; font-size: 18px; color: #fbbf24;">
@@ -6968,31 +6518,42 @@ else:
             st.info("Kamera o'lchamlarini kiriting")
         st.subheader("4. Germitika hisobi")
         
-        germitika_maydoni_multi = multi_L * multi_W
+        germitika_maydoni_multi = (panel_stats["total_area"]["walls"]
+                                    + panel_stats["total_area"]["ceiling"]
+                                    + panel_stats["total_area"]["floor"])
         germitika_multi = calculate_germitika(germitika_maydoni_multi)
-        
-        col_g1, col_g2, col_g3 = st.columns(3)
-        
+        germitika_narx_disp_m = st.session_state.get("germitika_narx", 5.0)
+        germitika_jami_disp_m = germitika_multi["germitika_soni"] * germitika_narx_disp_m
+
+        col_g1, col_g2, col_g3, col_g4 = st.columns(4)
+
         with col_g1:
             st.markdown(f"""<div class="metric-box" style="background:#f0fdf4; border-top:4px solid #16a34a;">
                 <div class="metric-title"><i class="fas fa-fill-drip"></i> GERMITIKA</div>
                 <div class="metric-value">{germitika_multi['germitika_soni']} ta</div>
             </div>""", unsafe_allow_html=True)
-        
+
         with col_g2:
             st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #3b82f6;">
                 <div class="metric-title"><i class="fas fa-calculator"></i> HISOB</div>
                 <div class="metric-value">{germitika_maydoni_multi:.1f} m²</div>
-                <div style="font-size:9px;">Pol maydoni</div>
+                <div style="font-size:9px;">Jami maydon (devor+patalok+pol)</div>
             </div>""", unsafe_allow_html=True)
-        
+
         with col_g3:
             st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #8b5cf6;">
                 <div class="metric-title"><i class="fas fa-info-circle"></i> ASOS</div>
-                <div class="metric-value">50 m² = 24 ta</div>
+                <div class="metric-value">50 m² = 22 ta</div>
                 <div style="font-size:9px;">Standart me'yor</div>
             </div>""", unsafe_allow_html=True)
-        
+
+        with col_g4:
+            st.markdown(f"""<div class="metric-box" style="background:#f8fafc; border-top:4px solid #16a34a;">
+                <div class="metric-title"><i class="fas fa-dollar-sign"></i> NARXI</div>
+                <div class="metric-value">${germitika_jami_disp_m:,.0f}</div>
+                <div style="font-size:9px;">{germitika_multi['germitika_soni']} ta × ${germitika_narx_disp_m:,.2f}</div>
+            </div>""", unsafe_allow_html=True)
+
         st.caption(f" {germitika_multi['hisob_metodi']} ")
         st.divider()
 
@@ -7038,22 +6599,55 @@ else:
         with col_btn3:
             if st.button("📄 PDF Hisobot", use_container_width=True):
                 try:
+                    _T_multi = wall_mm_multi / 1000.0
+                    _inner_hajm_multi = (max(multi_L - 2 * _T_multi, 0)
+                                         * max(multi_W - 2 * _T_multi, 0)
+                                         * max(heights_list))
+                    _total_area_multi = (panel_stats["total_area"]["walls"]
+                                         + panel_stats["total_area"]["ceiling"]
+                                         + panel_stats["total_area"]["floor"])
                     pdf_bytes = generate_pdf_report(
                         proj_name_multi, code_multi,
                         multi_L, multi_W, max(heights_list),
                         wall_mm_multi, wall_mm_multi, floor_mm_multi if multi_pol_bor else 0,
                         multi_pol_bor, "PUR", "PUR", multi_pol_material if multi_pol_bor else "Mavjud emas",
-                        "Standart", comp_type_m,
+                        eshik_turi_multi, comp_type_m,
                         panel_stats['total_panels'],
-                        multi_L * multi_W * max(heights_list),
-                        multi_L * multi_W * max(heights_list) * 0.85,
-                        multi_L * multi_W,
+                        round(multi_L * multi_W * max(heights_list), 2),
+                        round(_inner_hajm_multi, 2),
+                        round(_total_area_multi, 2),
                         fig_3d=None,
-                        ai_result=st.session_state.ai_result)
-                    st.download_button("📥 Yuklab olish", data=pdf_bytes,
-                                    file_name=f"{code_multi}_report.pdf", mime="application/pdf")
+                        svg_string=sheet_svg_multi,
+                        door_w_m=door_w_multi,
+                        door_h_m=door_h_multi,
+                        panel_jami=panel_jami,
+                        eshik_jami=eshik_jami,
+                        agregat_jami=agregat_jami,
+                        germitika_jami=germitika_jami,
+                        qoshimcha_jami=qoshimcha_jami,
+                        jami_xarajat=jami,
+                        m2_narx=m2_narx,
+                    )
+                    if pdf_bytes:
+                        st.session_state["pdf_bytes_multi"] = pdf_bytes
+                        st.session_state["pdf_filename_multi"] = f"{code_multi}_report.pdf"
+                    else:
+                        st.session_state["pdf_bytes_multi"] = None
+                        st.error("PDF yaratib bo'lmadi. Loyiha nomi/kodida faqat lotin harflari va raqamlardan foydalanib qayta urinib ko'ring.")
                 except Exception as e:
+                    st.session_state["pdf_bytes_multi"] = None
                     st.error(f"PDF yaratishda xatolik: {e}")
+
+            # Tugma "if" blokidan tashqarida - yuklab olish tugmasi bosilgach
+            # yo'qolib qolmasligi uchun.
+            if st.session_state.get("pdf_bytes_multi"):
+                st.download_button(
+                    "📥 Yuklab olish",
+                    data=st.session_state["pdf_bytes_multi"],
+                    file_name=st.session_state.get("pdf_filename_multi", "report.pdf"),
+                    mime="application/pdf",
+                    key="dl_pdf_multi"
+                )
 # test.py faylining eng oxiriga qo'shing
 if __name__ == "__main__":
     import sys
