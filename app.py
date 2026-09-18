@@ -2723,6 +2723,386 @@ def build_3d_multi_html(L, W, heights_list, corridor_pos, corridor_w, wall_mm,
     return html_code
 
 
+# ========== CUSTOM LOYIHA: ERKIN JOYLASHTIRILGAN XONALAR (L-shakl va h.k.) ==========
+ROOM_TYPE_COLORS = {
+    "Sovutish kamerasi": 0x8fd19e,
+    "Ishlov berish xonasi": 0xa7c7e7,
+    "Yuklash/tushirish xonasi": 0xf4b183,
+    "Yo'lak/koridor": 0xd9d9d9,
+    "Boshqa": 0xc9b8e0,
+}
+
+
+def build_3d_custom_html(rooms, wall_mm):
+    """
+    Har biri o'z x,z,eni,bo'yi,balandligiga ega bo'lgan erkin joylashtirilgan
+    xonalar to'plamidan (L-shakl, T-shakl va h.k.) 3D sahna quradi.
+    rooms: [{"name","type","w","d","h","x","z"}, ...] (metrlarda)
+    """
+    import json
+    T = wall_mm / 1000.0
+    if not rooms:
+        rooms = []
+
+    max_x = max((r["x"] + r["w"] for r in rooms), default=10)
+    max_z = max((r["z"] + r["d"] for r in rooms), default=10)
+    max_h = max((r["h"] for r in rooms), default=3)
+
+    rooms_json = json.dumps(rooms)
+    colors_json = json.dumps(ROOM_TYPE_COLORS)
+
+    cam_x = max_x * 1.4 + 4
+    cam_y = max_h * 3.5 + 6
+    cam_z = max_z * 1.6 + 6
+    target_x = max_x / 2
+    target_z = max_z / 2
+
+    html_code = f'''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {{ margin: 0; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; background-color: #f8fafc; }}
+        #info {{
+            position: absolute; top: 16px; left: 16px;
+            background: rgba(255,255,255,0.98); color: #2F4A28;
+            padding: 12px 20px; border-radius: 12px; font-size: 11px;
+            border: 1px solid rgba(0,90,54,0.25); border-left: 4px solid #4E8A3A;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06); z-index: 10;
+            font-family: monospace; line-height: 1.4;
+        }}
+        .room-label {{
+            background: #ffffff; padding: 3px 9px; border-radius: 6px;
+            border: 1px solid #cbd5e1; border-left: 3px solid #4E8A3A;
+            font-size: 10px; font-weight: 600; white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); color: #2F4A28; font-family: monospace;
+        }}
+    </style>
+</head>
+<body>
+    <div id="info">
+        <strong style="color:#4E8A3A;">ECOPROM CUSTOM LOYIHA</strong><br>
+        Xonalar soni: {len(rooms)} | Devor: {wall_mm}mm<br>
+        Umumiy maydon: {max_x:.1f} x {max_z:.1f} m
+    </div>
+
+    <script type="importmap">
+        {{ "imports": {{ "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" }} }}
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
+        import {{ CSS2DRenderer, CSS2DObject }} from 'three/addons/renderers/CSS2DRenderer.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf1f5f9);
+
+        const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set({cam_x:.1f}, {cam_y:.1f}, {cam_z:.1f});
+
+        const renderer = new THREE.WebGLRenderer({{ antialias: true }});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set({target_x:.1f}, 1.0, {target_z:.1f});
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+        scene.add(ambientLight);
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        mainLight.position.set({max_x} * 2, {max_h} * 5, {max_z} * 2);
+        mainLight.castShadow = true;
+        scene.add(mainLight);
+
+        const groundGeo = new THREE.PlaneGeometry({max_x + 6}, {max_z + 6});
+        const groundMat = new THREE.MeshStandardMaterial({{ color: 0xe9edf1, side: THREE.DoubleSide }});
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.set({target_x:.1f}, -0.03, {target_z:.1f});
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        const T = {T};
+        const rooms = {rooms_json};
+        const ROOM_COLORS = {colors_json};
+        const wallMat = (hex) => new THREE.MeshStandardMaterial({{ color: hex, metalness: 0.15, roughness: 0.55, side: THREE.DoubleSide }});
+        const floorMat = new THREE.MeshStandardMaterial({{ color: 0xf5f5f0, metalness: 0.05, roughness: 0.8 }});
+        const edgeMat = new THREE.LineBasicMaterial({{ color: 0x2F4A28, linewidth: 1 }});
+
+        function createLabel(text, x, y, z, cls) {{
+            const div = document.createElement('div');
+            div.className = cls || 'room-label';
+            div.textContent = text;
+            const label = new CSS2DObject(div);
+            label.position.set(x, y, z);
+            scene.add(label);
+        }}
+
+        rooms.forEach((r) => {{
+            const hex = ROOM_COLORS[r.type] || 0xc9b8e0;
+            const cx = r.x + r.w / 2;
+            const cz = r.z + r.d / 2;
+            const h = r.h;
+
+            // Pol
+            const floor = new THREE.Mesh(new THREE.BoxGeometry(r.w, 0.05, r.d), floorMat);
+            floor.position.set(cx, 0.025, cz);
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // 4 devor (yupqa quti - sendvich panel qalinligi T)
+            const mat = wallMat(hex);
+            const walls = [
+                {{ w: r.w, h: h, d: T, x: cx, y: h / 2, z: r.z + T / 2 }},
+                {{ w: r.w, h: h, d: T, x: cx, y: h / 2, z: r.z + r.d - T / 2 }},
+                {{ w: T, h: h, d: r.d, x: r.x + T / 2, y: h / 2, z: cz }},
+                {{ w: T, h: h, d: r.d, x: r.x + r.w - T / 2, y: h / 2, z: cz }},
+            ];
+            walls.forEach((wd) => {{
+                const geo = new THREE.BoxGeometry(wd.w, wd.h, wd.d);
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(wd.x, wd.y, wd.z);
+                mesh.castShadow = true;
+                scene.add(mesh);
+                const edges = new THREE.EdgesGeometry(geo);
+                const line = new THREE.LineSegments(edges, edgeMat);
+                line.position.copy(mesh.position);
+                scene.add(line);
+            }});
+
+            // Tom (yarim shaffof - ichkarisi ko'rinishi uchun)
+            const roofGeo = new THREE.BoxGeometry(r.w, 0.06, r.d);
+            const roofMat = new THREE.MeshStandardMaterial({{ color: hex, transparent: true, opacity: 0.35, side: THREE.DoubleSide }});
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.position.set(cx, h + 0.03, cz);
+            scene.add(roof);
+
+            createLabel(r.name + " (" + r.w.toFixed(1) + "x" + r.d.toFixed(1) + "x" + h.toFixed(1) + "m)", cx, h + 0.35, cz);
+        }});
+
+        function animate() {{
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }}
+        animate();
+
+        window.addEventListener('resize', () => {{
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight); labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }});
+    </script>
+</body>
+</html>'''
+    return html_code
+
+
+def draw_custom_floor_plan(rooms):
+    """Custom loyiha uchun 2D yuqoridan ko'rinish (matplotlib)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+
+    if not rooms:
+        return None
+
+    max_x = max(r["x"] + r["w"] for r in rooms)
+    max_z = max(r["z"] + r["d"] for r in rooms)
+
+    fig, ax = plt.subplots(figsize=(9, 9 * max(max_z, 1) / max(max_x, 1) + 1))
+    color_hex = {
+        "Sovutish kamerasi": "#8fd19e",
+        "Ishlov berish xonasi": "#a7c7e7",
+        "Yuklash/tushirish xonasi": "#f4b183",
+        "Yo'lak/koridor": "#d9d9d9",
+        "Boshqa": "#c9b8e0",
+    }
+    for r in rooms:
+        c = color_hex.get(r["type"], "#c9b8e0")
+        rect = patches.Rectangle((r["x"], r["z"]), r["w"], r["d"],
+                                  linewidth=1.5, edgecolor="#2F4A28", facecolor=c, alpha=0.85)
+        ax.add_patch(rect)
+        ax.text(r["x"] + r["w"] / 2, r["z"] + r["d"] / 2,
+                f"{r['name']}\n{r['w']:.1f}x{r['d']:.1f}m",
+                ha="center", va="center", fontsize=8, color="#2F4A28", weight="bold")
+
+    ax.set_xlim(-1, max_x + 1)
+    ax.set_ylim(-1, max_z + 1)
+    ax.invert_yaxis()
+    ax.set_aspect("equal")
+    ax.set_xlabel("X (m)")
+    ax.set_ylabel("Z (m)")
+    ax.set_title("Custom loyiha - Yuqoridan ko'rinish")
+    ax.grid(True, linestyle="--", alpha=0.3)
+    fig.tight_layout()
+
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=130)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def calculate_custom_costs(rooms, wall_mm, panel_width_m, devor_narx, patalok_narx, pol_narx, germitika_narx):
+    """Custom loyihadagi barcha xonalar bo'yicha panel/xarajat hisobi."""
+    T = wall_mm / 1000.0
+    total_wall_panels = total_ceiling_panels = total_floor_panels = 0
+    total_wall_area = total_ceiling_area = total_floor_area = 0.0
+    room_stats = []
+
+    for r in rooms:
+        w, d, h = r["w"], r["d"], r["h"]
+        wall_panels = panel_count(w, panel_width_m)["total_panels"] * 2
+        wall_panels += panel_count(d, panel_width_m)["total_panels"] * 2
+        wall_area = 2 * (w + d) * h
+
+        inner_w, inner_d = max(w - 2 * T, 0.1), max(d - 2 * T, 0.1)
+        ceiling_panels = (panel_count(inner_w, panel_width_m)["total_panels"] *
+                          panel_count(inner_d, panel_width_m)["total_panels"])
+        ceiling_area = inner_w * inner_d
+        floor_panels = ceiling_panels
+        floor_area = ceiling_area
+
+        total_wall_panels += wall_panels
+        total_ceiling_panels += ceiling_panels
+        total_floor_panels += floor_panels
+        total_wall_area += wall_area
+        total_ceiling_area += ceiling_area
+        total_floor_area += floor_area
+
+        room_stats.append({
+            "name": r["name"], "type": r["type"], "w": w, "d": d, "h": h,
+            "wall_panels": wall_panels, "ceiling_panels": ceiling_panels, "floor_panels": floor_panels,
+        })
+
+    total_area = total_wall_area + total_ceiling_area + total_floor_area
+    germitika = calculate_germitika(total_area)
+
+    devor_cost = total_wall_panels * devor_narx
+    patalok_cost = total_ceiling_panels * patalok_narx
+    pol_cost = total_floor_panels * pol_narx
+    germitika_cost = germitika["germitika_soni"] * germitika_narx
+    jami = devor_cost + patalok_cost + pol_cost + germitika_cost
+
+    return {
+        "room_stats": room_stats,
+        "total_wall_panels": total_wall_panels, "total_ceiling_panels": total_ceiling_panels,
+        "total_floor_panels": total_floor_panels,
+        "total_wall_area": total_wall_area, "total_ceiling_area": total_ceiling_area,
+        "total_floor_area": total_floor_area, "total_area": total_area,
+        "germitika": germitika, "devor_cost": devor_cost, "patalok_cost": patalok_cost,
+        "pol_cost": pol_cost, "germitika_cost": germitika_cost, "jami": jami,
+    }
+
+
+def render_custom_sidebar():
+    """Custom loyiha uchun sidebar: xonalar jadvali + devor/panel sozlamalari."""
+    import pandas as pd
+
+    st.markdown("<div class='card'><b>Xonalar (jadval)</b>", unsafe_allow_html=True)
+    st.caption("Har bir xona uchun eni/bo'yi/balandligi va X,Z pozitsiyasini kiriting. Xonalarni istalgan joyga qo'yib, L-shakl yoki boshqa erkin konfiguratsiya hosil qilishingiz mumkin.")
+
+    if "custom_rooms" not in st.session_state:
+        st.session_state["custom_rooms"] = [
+            {"name": "Sovutish kamerasi 1", "type": "Sovutish kamerasi", "w": 7.0, "d": 12.0, "h": 3.0, "x": 16.0, "z": 0.0},
+            {"name": "Sovutish kamerasi 2", "type": "Sovutish kamerasi", "w": 7.0, "d": 12.0, "h": 3.0, "x": 23.0, "z": 0.0},
+            {"name": "Ishlov berish", "type": "Ishlov berish xonasi", "w": 16.0, "d": 30.0, "h": 3.5, "x": 0.0, "z": 0.0},
+        ]
+
+    df = pd.DataFrame(st.session_state["custom_rooms"])
+    edited = st.data_editor(
+        df,
+        num_rows="dynamic",
+        use_container_width=True,
+        column_config={
+            "name": st.column_config.TextColumn("Nomi"),
+            "type": st.column_config.SelectboxColumn("Turi", options=list(ROOM_TYPE_COLORS.keys())),
+            "w": st.column_config.NumberColumn("Eni (m)", min_value=0.5, step=0.1, format="%.2f"),
+            "d": st.column_config.NumberColumn("Bo'yi (m)", min_value=0.5, step=0.1, format="%.2f"),
+            "h": st.column_config.NumberColumn("Balandligi (m)", min_value=2.0, step=0.1, format="%.2f"),
+            "x": st.column_config.NumberColumn("X pozitsiya (m)", step=0.1, format="%.2f"),
+            "z": st.column_config.NumberColumn("Z pozitsiya (m)", step=0.1, format="%.2f"),
+        },
+        key="custom_rooms_editor",
+    )
+    st.session_state["custom_rooms"] = edited.fillna(0).to_dict("records")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='card'><b>Panel va narxlar</b>", unsafe_allow_html=True)
+    st.selectbox("Devor qalinligi", d_qalin_opts, key="custom_wall_qalin")
+    st.selectbox("Panel eni", pw_opts, key="custom_panel_width_m")
+    st.number_input("Devor paneli narxi ($/dona)", 0.0, 1000.0, 45.0, 1.0, key="custom_devor_narx")
+    st.number_input("Patalok paneli narxi ($/dona)", 0.0, 1000.0, 50.0, 1.0, key="custom_patalok_narx")
+    st.number_input("Pol paneli narxi ($/dona)", 0.0, 1000.0, 40.0, 1.0, key="custom_pol_narx")
+    st.number_input("Germitika narxi ($/dona)", 0.0, 100.0, 3.0, 0.5, key="custom_germitika_narx")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='card'><b>Loyiha</b>", unsafe_allow_html=True)
+    st.text_input("Nomi", value="Custom sovutish ombori", key="custom_project_name")
+    st.text_input("Kodi", value="EP-CUSTOM-01", key="custom_project_code")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_custom_project():
+    """Custom loyiha uchun asosiy (3D + 2D + xarajat) ko'rinish."""
+    rooms = st.session_state.get("custom_rooms", [])
+    rooms = [r for r in rooms if r.get("w") and r.get("d") and r.get("h") and r.get("name")]
+
+    if not rooms:
+        st.warning("Kamida bitta xona qo'shing (chapdagi jadvalda).")
+        return
+
+    wall_mm = mm_val(st.session_state.get("custom_wall_qalin", "100mm"))
+    panel_width_m = float(st.session_state.get("custom_panel_width_m", 0.96))
+
+    st.subheader("1. 3D Vizualizatsiya (Custom loyiha)")
+    html_3d = build_3d_custom_html(rooms, wall_mm)
+    components.html(html_3d, height=650, scrolling=False)
+
+    st.subheader("2. Yuqoridan ko'rinish (2D reja)")
+    plan_buf = draw_custom_floor_plan(rooms)
+    if plan_buf:
+        st.image(plan_buf, use_container_width=True)
+
+    st.subheader("3. Xarajatlar hisoboti")
+    devor_narx = st.session_state.get("custom_devor_narx", 45.0)
+    patalok_narx = st.session_state.get("custom_patalok_narx", 50.0)
+    pol_narx = st.session_state.get("custom_pol_narx", 40.0)
+    germitika_narx = st.session_state.get("custom_germitika_narx", 3.0)
+
+    costs = calculate_custom_costs(rooms, wall_mm, panel_width_m, devor_narx, patalok_narx, pol_narx, germitika_narx)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Devor panel", f"{costs['total_wall_panels']} dona", f"${costs['devor_cost']:,.0f}")
+    c2.metric("Patalok panel", f"{costs['total_ceiling_panels']} dona", f"${costs['patalok_cost']:,.0f}")
+    c3.metric("Pol panel", f"{costs['total_floor_panels']} dona", f"${costs['pol_cost']:,.0f}")
+    c4.metric("Germitika", f"{costs['germitika']['germitika_soni']} dona", f"${costs['germitika_cost']:,.0f}")
+    c5.metric("Jami maydon", f"{costs['total_area']:.1f} m2")
+
+    st.markdown(f"""<div class="ai-box">
+    <h3>JAMI XARAJAT: ${costs['jami']:,.0f}</h3>
+    Devor: ${costs['devor_cost']:,.0f} | Patalok: ${costs['patalok_cost']:,.0f} | Pol: ${costs['pol_cost']:,.0f} | Germitika: ${costs['germitika_cost']:,.0f}
+    </div>""", unsafe_allow_html=True)
+
+    with st.expander("Xonalar bo'yicha batafsil"):
+        for rs in costs["room_stats"]:
+            st.write(f"**{rs['name']}** ({rs['type']}) — {rs['w']:.1f}x{rs['d']:.1f}x{rs['h']:.1f}m: "
+                     f"devor {rs['wall_panels']} dona, patalok {rs['ceiling_panels']} dona, pol {rs['floor_panels']} dona")
+
+
 def build_segs(sz):
     """
     Oddiy panel segmentlari - burchak modullarisiz.
@@ -5110,7 +5490,7 @@ with st.sidebar:
     # Asosiy rejim tanlash
     main_mode = st.radio("Asosiy rejim", ["Sovutish tizimi", "Qurilish"], key="main_mode")
     if main_mode == "Sovutish tizimi":
-        mode = st.radio("Kamera rejimi", ["Yagona kamera", "Multi-kamera"], key="mode")
+        mode = st.radio("Kamera rejimi", ["Yagona kamera", "Multi-kamera", "Custom loyiha"], key="mode")
     st.markdown("</div>", unsafe_allow_html=True)
 
     if main_mode == "Sovutish tizimi":
@@ -5428,7 +5808,7 @@ with st.sidebar:
             st.text_input("Nomi", key="project_name", on_change=save_form_data)
             st.text_input("Kodi", key="room_code",    on_change=save_form_data)
             st.markdown("</div>", unsafe_allow_html=True)
-        else:  # Multi-kamera
+        elif mode == "Multi-kamera":
             st.markdown("<div class='card'><b>Olchamlar</b>", unsafe_allow_html=True)
             input_mode = st.radio("Kiritish usuli",
                 ["Umumiy maydon (m2)","Uzunlik x En (qolda)"], key="multi_input_mode")
@@ -5506,7 +5886,10 @@ with st.sidebar:
             proj_name_multi = st.text_input("Nomi", value="200m2 Sovutgich Ombori", key="proj_name_multi")
             code_multi      = st.text_input("Kodi", value="EP-2024-M", key="code_multi")
             st.markdown("</div>", unsafe_allow_html=True)
-    
+
+        else:  # Custom loyiha
+            render_custom_sidebar()
+
     else:  # Qurilish rejimi
         if CONSTRUCTION_AVAILABLE:
             construction_params = construction_sidebar()
@@ -5539,7 +5922,11 @@ if main_mode == "Qurilish":
 else:
     # ========== SOVUTISH TIZIMI ==========
     mode = st.session_state.get("mode", "Yagona kamera")
-    
+
+    if mode == "Custom loyiha":
+        render_custom_project()
+        st.stop()
+
     # AI TAVSIYA
     st.subheader("AI Texnik Tavsiya")
     ai_col1,ai_col2,ai_col3,ai_col4,ai_col5 = st.columns(5)
