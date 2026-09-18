@@ -3103,36 +3103,48 @@ def render_custom_sidebar():
              "bog'lanish_id": 2, "tomon": "O'ng", "tekislash": "Boshiga", "oraliq": 0.0, "x": 0.0, "z": 0.0},
         ]
 
-    rooms_with_id = [dict(r, id=i + 1) for i, r in enumerate(st.session_state["custom_rooms"])]
-    df = pd.DataFrame(rooms_with_id)
-    cols = ["id", "name", "type", "w", "d", "h", "bog'lanish_id", "tomon", "tekislash", "oraliq", "x", "z"]
-    for c in cols:
-        if c not in df.columns:
-            df[c] = 0
-    df = df[cols]
+    # Diqqat: "id" ustuni ATAYLAB tahrirlanadigan jadvalga QO'SHILMAYDI - u faqat
+    # qator tartib raqami bo'lgani uchun har doim pastda alohida ko'rsatiladi.
+    # (disabled ustunlar num_rows="dynamic" bilan birga bo'lganda Streamlit'da
+    # yangi qator qo'shishni/raqam kiritishni buzadigan xatolikka olib kelishi mumkin edi.)
+    cols = ["name", "type", "w", "d", "h", "bog'lanish_id", "tomon", "tekislash", "oraliq", "x", "z"]
+    rows = []
+    for r in st.session_state["custom_rooms"]:
+        row = {c: r.get(c) for c in cols}
+        rows.append(row)
+    df = pd.DataFrame(rows, columns=cols)
 
     edited = st.data_editor(
         df,
         num_rows="dynamic",
         use_container_width=True,
         column_config={
-            "id": st.column_config.NumberColumn("ID", disabled=True, help="Xonaning tartib raqami - boshqa xonalar shu ID ga bog'lanadi"),
-            "name": st.column_config.TextColumn("Nomi"),
-            "type": st.column_config.SelectboxColumn("Turi", options=list(ROOM_TYPE_COLORS.keys())),
-            "w": st.column_config.NumberColumn("Eni (m)", min_value=0.5, step=0.1, format="%.2f"),
-            "d": st.column_config.NumberColumn("Bo'yi (m)", min_value=0.5, step=0.1, format="%.2f"),
-            "h": st.column_config.NumberColumn("Balandligi (m)", min_value=2.0, step=0.1, format="%.2f"),
-            "bog'lanish_id": st.column_config.NumberColumn("Bog'lanish ID", min_value=0, step=1, help="0 = mustaqil (X/Z qo'lda). Boshqa qiymat = shu ID li xonaga nisbatan joylashadi"),
-            "tomon": st.column_config.SelectboxColumn("Tomoni", options=ROOM_TOMON_OPTS, help="Bog'langan xonaga nisbatan qaysi tomonda turadi"),
-            "tekislash": st.column_config.SelectboxColumn("Tekislash", options=ROOM_TEKISLASH_OPTS, help="Ko'ndalang o'q bo'yicha tekislash"),
-            "oraliq": st.column_config.NumberColumn("Oraliq (m)", min_value=0.0, step=0.1, format="%.2f", help="0 = devorlar tegib turadi (umumiy devor)"),
-            "x": st.column_config.NumberColumn("X (m, mustaqil bo'lsa)", step=0.1, format="%.2f"),
-            "z": st.column_config.NumberColumn("Z (m, mustaqil bo'lsa)", step=0.1, format="%.2f"),
+            "name": st.column_config.TextColumn("Nomi", default="Yangi xona"),
+            "type": st.column_config.SelectboxColumn("Turi", options=list(ROOM_TYPE_COLORS.keys()), default="Boshqa"),
+            "w": st.column_config.NumberColumn("Eni (m)", min_value=0.5, step=0.1, format="%.2f", default=5.0),
+            "d": st.column_config.NumberColumn("Bo'yi (m)", min_value=0.5, step=0.1, format="%.2f", default=5.0),
+            "h": st.column_config.NumberColumn("Balandligi (m)", min_value=2.0, step=0.1, format="%.2f", default=3.0),
+            "bog'lanish_id": st.column_config.NumberColumn("Bog'lanish ID", min_value=0, step=1, default=0, help="0 = mustaqil (X/Z qo'lda). Boshqa qiymat = shu ID li xonaga nisbatan joylashadi"),
+            "tomon": st.column_config.SelectboxColumn("Tomoni", options=ROOM_TOMON_OPTS, default="O'ng", help="Bog'langan xonaga nisbatan qaysi tomonda turadi"),
+            "tekislash": st.column_config.SelectboxColumn("Tekislash", options=ROOM_TEKISLASH_OPTS, default="Boshiga", help="Ko'ndalang o'q bo'yicha tekislash"),
+            "oraliq": st.column_config.NumberColumn("Oraliq (m)", min_value=0.0, step=0.1, format="%.2f", default=0.0, help="0 = devorlar tegib turadi (umumiy devor)"),
+            "x": st.column_config.NumberColumn("X (m, mustaqil bo'lsa)", step=0.1, format="%.2f", default=0.0),
+            "z": st.column_config.NumberColumn("Z (m, mustaqil bo'lsa)", step=0.1, format="%.2f", default=0.0),
         },
         key="custom_rooms_editor",
     )
-    edited = edited.fillna(0)
-    st.session_state["custom_rooms"] = edited.drop(columns=["id"]).to_dict("records")
+
+    # Ustun turiga qarab alohida to'ldirish - butun jadvalga fillna(0) qilinsa
+    # matn ustunlari (nomi/turi/tomon/tekislash) buzilib "0" ga aylanib qolar edi.
+    for c in ["name"]:
+        edited[c] = edited[c].fillna("").astype(str)
+    for c, default_val in (("type", "Boshqa"), ("tomon", "O'ng"), ("tekislash", "Boshiga")):
+        edited[c] = edited[c].fillna(default_val)
+    for c in ["w", "d", "h", "bog'lanish_id", "oraliq", "x", "z"]:
+        edited[c] = pd.to_numeric(edited[c], errors="coerce").fillna(0.0)
+    edited["bog'lanish_id"] = edited["bog'lanish_id"].astype(int)
+
+    st.session_state["custom_rooms"] = edited.to_dict("records")
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='card'><b>Panel va narxlar</b>", unsafe_allow_html=True)
