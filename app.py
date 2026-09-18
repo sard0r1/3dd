@@ -3008,37 +3008,131 @@ def calculate_custom_costs(rooms, wall_mm, panel_width_m, devor_narx, patalok_na
     }
 
 
+ROOM_TOMON_OPTS = ["O'ng", "Chap", "Tepa", "Past"]
+ROOM_TEKISLASH_OPTS = ["Boshiga", "Oxiriga", "Markazga"]
+
+
+def resolve_room_positions(rooms):
+    """
+    Har bir xona uchun 'id' (qatordagi tartib raqami, 1 dan boshlab) avtomatik beriladi.
+    Xona boshqa xonaga (bog'lanish_id) nisbatan tomon+tekislash+oraliq orqali
+    biriktirilgan bo'lsa, uning x,z pozitsiyasi avtomatik hisoblanadi
+    (masalan: 2-xona 1-xonaning o'ng tomonida, tepaga tekislangan, oraliq=0 -> devorlari umumiy).
+    bog'lanish_id=0 yoki bo'sh bo'lsa, xona mustaqil (x,z qo'lda kiritilgan qiymatlar ishlatiladi).
+    """
+    by_id = {i + 1: r for i, r in enumerate(rooms)}
+    resolved = {}
+
+    def resolve(rid, seen):
+        if rid in resolved:
+            return resolved[rid]
+        if rid in seen or rid not in by_id:
+            resolved[rid] = (0.0, 0.0)
+            return resolved[rid]
+        seen = seen | {rid}
+        r = by_id[rid]
+        try:
+            anchor_id = int(r.get("bog'lanish_id") or 0)
+        except (ValueError, TypeError):
+            anchor_id = 0
+
+        if not anchor_id or anchor_id == rid or anchor_id not in by_id:
+            x, z = float(r.get("x") or 0), float(r.get("z") or 0)
+        else:
+            ax, az = resolve(anchor_id, seen)
+            anchor = by_id[anchor_id]
+            aw, ad = float(anchor["w"]), float(anchor["d"])
+            rw, rd = float(r["w"]), float(r["d"])
+            gap = float(r.get("oraliq") or 0)
+            tomon = r.get("tomon") or "O'ng"
+            tekislash = r.get("tekislash") or "Boshiga"
+
+            if tomon in ("O'ng", "Chap"):
+                x = ax + aw + gap if tomon == "O'ng" else ax - rw - gap
+                if tekislash == "Boshiga":
+                    z = az
+                elif tekislash == "Oxiriga":
+                    z = az + ad - rd
+                else:
+                    z = az + (ad - rd) / 2
+            else:  # Tepa / Past
+                z = az - rd - gap if tomon == "Tepa" else az + ad + gap
+                if tekislash == "Boshiga":
+                    x = ax
+                elif tekislash == "Oxiriga":
+                    x = ax + aw - rw
+                else:
+                    x = ax + (aw - rw) / 2
+        resolved[rid] = (x, z)
+        return resolved[rid]
+
+    for rid in by_id:
+        resolve(rid, set())
+
+    out = []
+    for i, r in enumerate(rooms):
+        rid = i + 1
+        x, z = resolved[rid]
+        nr = dict(r)
+        nr["id"] = rid
+        nr["x"], nr["z"] = x, z
+        out.append(nr)
+    return out
+
+
 def render_custom_sidebar():
     """Custom loyiha uchun sidebar: xonalar jadvali + devor/panel sozlamalari."""
     import pandas as pd
 
     st.markdown("<div class='card'><b>Xonalar (jadval)</b>", unsafe_allow_html=True)
-    st.caption("Har bir xona uchun eni/bo'yi/balandligi va X,Z pozitsiyasini kiriting. Xonalarni istalgan joyga qo'yib, L-shakl yoki boshqa erkin konfiguratsiya hosil qilishingiz mumkin.")
+    st.caption(
+        "Har bir xonaning eni/bo'yi/balandligini kiriting. Pozitsiyani ikki xil usulda belgilash mumkin: "
+        "(1) 'Bog'lanish ID' orqali - boshqa xonaning ID siga nisbatan tomon (O'ng/Chap/Tepa/Past), "
+        "tekislash va oraliq kiritsangiz, X/Z avtomatik hisoblanadi (masalan 2-xona 1-xonaning o'ng tomonida, "
+        "tepaga tekislangan, oraliq=0 - devorlari umumiy bo'ladi); (2) 'Bog'lanish ID'=0 qoldirsangiz, "
+        "X/Z ustunlariga qo'lda koordinata kiritasiz (mustaqil joylashuv)."
+    )
 
     if "custom_rooms" not in st.session_state:
         st.session_state["custom_rooms"] = [
-            {"name": "Sovutish kamerasi 1", "type": "Sovutish kamerasi", "w": 7.0, "d": 12.0, "h": 3.0, "x": 16.0, "z": 0.0},
-            {"name": "Sovutish kamerasi 2", "type": "Sovutish kamerasi", "w": 7.0, "d": 12.0, "h": 3.0, "x": 23.0, "z": 0.0},
-            {"name": "Ishlov berish", "type": "Ishlov berish xonasi", "w": 16.0, "d": 30.0, "h": 3.5, "x": 0.0, "z": 0.0},
+            {"name": "Ishlov berish", "type": "Ishlov berish xonasi", "w": 16.0, "d": 30.0, "h": 3.5,
+             "bog'lanish_id": 0, "tomon": "O'ng", "tekislash": "Boshiga", "oraliq": 0.0, "x": 0.0, "z": 0.0},
+            {"name": "Sovutish kamerasi 1", "type": "Sovutish kamerasi", "w": 7.0, "d": 12.0, "h": 3.0,
+             "bog'lanish_id": 1, "tomon": "O'ng", "tekislash": "Boshiga", "oraliq": 0.0, "x": 0.0, "z": 0.0},
+            {"name": "Sovutish kamerasi 2", "type": "Sovutish kamerasi", "w": 7.0, "d": 12.0, "h": 3.0,
+             "bog'lanish_id": 2, "tomon": "O'ng", "tekislash": "Boshiga", "oraliq": 0.0, "x": 0.0, "z": 0.0},
         ]
 
-    df = pd.DataFrame(st.session_state["custom_rooms"])
+    rooms_with_id = [dict(r, id=i + 1) for i, r in enumerate(st.session_state["custom_rooms"])]
+    df = pd.DataFrame(rooms_with_id)
+    cols = ["id", "name", "type", "w", "d", "h", "bog'lanish_id", "tomon", "tekislash", "oraliq", "x", "z"]
+    for c in cols:
+        if c not in df.columns:
+            df[c] = 0
+    df = df[cols]
+
     edited = st.data_editor(
         df,
         num_rows="dynamic",
         use_container_width=True,
         column_config={
+            "id": st.column_config.NumberColumn("ID", disabled=True, help="Xonaning tartib raqami - boshqa xonalar shu ID ga bog'lanadi"),
             "name": st.column_config.TextColumn("Nomi"),
             "type": st.column_config.SelectboxColumn("Turi", options=list(ROOM_TYPE_COLORS.keys())),
             "w": st.column_config.NumberColumn("Eni (m)", min_value=0.5, step=0.1, format="%.2f"),
             "d": st.column_config.NumberColumn("Bo'yi (m)", min_value=0.5, step=0.1, format="%.2f"),
             "h": st.column_config.NumberColumn("Balandligi (m)", min_value=2.0, step=0.1, format="%.2f"),
-            "x": st.column_config.NumberColumn("X pozitsiya (m)", step=0.1, format="%.2f"),
-            "z": st.column_config.NumberColumn("Z pozitsiya (m)", step=0.1, format="%.2f"),
+            "bog'lanish_id": st.column_config.NumberColumn("Bog'lanish ID", min_value=0, step=1, help="0 = mustaqil (X/Z qo'lda). Boshqa qiymat = shu ID li xonaga nisbatan joylashadi"),
+            "tomon": st.column_config.SelectboxColumn("Tomoni", options=ROOM_TOMON_OPTS, help="Bog'langan xonaga nisbatan qaysi tomonda turadi"),
+            "tekislash": st.column_config.SelectboxColumn("Tekislash", options=ROOM_TEKISLASH_OPTS, help="Ko'ndalang o'q bo'yicha tekislash"),
+            "oraliq": st.column_config.NumberColumn("Oraliq (m)", min_value=0.0, step=0.1, format="%.2f", help="0 = devorlar tegib turadi (umumiy devor)"),
+            "x": st.column_config.NumberColumn("X (m, mustaqil bo'lsa)", step=0.1, format="%.2f"),
+            "z": st.column_config.NumberColumn("Z (m, mustaqil bo'lsa)", step=0.1, format="%.2f"),
         },
         key="custom_rooms_editor",
     )
-    st.session_state["custom_rooms"] = edited.fillna(0).to_dict("records")
+    edited = edited.fillna(0)
+    st.session_state["custom_rooms"] = edited.drop(columns=["id"]).to_dict("records")
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='card'><b>Panel va narxlar</b>", unsafe_allow_html=True)
@@ -3065,8 +3159,14 @@ def render_custom_project():
         st.warning("Kamida bitta xona qo'shing (chapdagi jadvalda).")
         return
 
+    rooms = resolve_room_positions(rooms)
+
     wall_mm = mm_val(st.session_state.get("custom_wall_qalin", "100mm"))
     panel_width_m = float(st.session_state.get("custom_panel_width_m", 0.96))
+
+    with st.expander("Hisoblangan pozitsiyalar (ID, X, Z)"):
+        for r in rooms:
+            st.write(f"ID {r['id']}: **{r['name']}** -> X={r['x']:.2f}m, Z={r['z']:.2f}m")
 
     st.subheader("1. 3D Vizualizatsiya (Custom loyiha)")
     html_3d = build_3d_custom_html(rooms, wall_mm)
