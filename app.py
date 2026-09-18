@@ -3108,11 +3108,23 @@ def render_custom_sidebar():
     # (disabled ustunlar num_rows="dynamic" bilan birga bo'lganda Streamlit'da
     # yangi qator qo'shishni/raqam kiritishni buzadigan xatolikka olib kelishi mumkin edi.)
     cols = ["name", "type", "w", "d", "h", "bog'lanish_id", "tomon", "tekislash", "oraliq", "x", "z"]
-    rows = []
-    for r in st.session_state["custom_rooms"]:
-        row = {c: r.get(c) for c in cols}
-        rows.append(row)
-    df = pd.DataFrame(rows, columns=cols)
+
+    def _normalize_rooms_df(df_in):
+        # Kiruvchi va chiquvchi jadval doim BIR XIL dtype'larga ega bo'lishi shart -
+        # aks holda st.data_editor "eskisi bilan yangisi boshqacha" deb hisoblab,
+        # birinchi tahrirni e'tiborsiz qoldirib, faqat 2-marta kiritilganda qabul
+        # qiladigan xatolikka olib kelar edi.
+        d = df_in.copy()
+        d["name"] = d["name"].fillna("").astype(str)
+        for c, default_val in (("type", "Boshqa"), ("tomon", "O'ng"), ("tekislash", "Boshiga")):
+            d[c] = d[c].fillna(default_val).astype(str)
+        for c in ["w", "d", "h", "oraliq", "x", "z"]:
+            d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0.0).astype(float)
+        d["bog'lanish_id"] = pd.to_numeric(d["bog'lanish_id"], errors="coerce").fillna(0).astype(int)
+        return d[cols]
+
+    rows = [{c: r.get(c) for c in cols} for r in st.session_state["custom_rooms"]]
+    df = _normalize_rooms_df(pd.DataFrame(rows, columns=cols))
 
     edited = st.data_editor(
         df,
@@ -3134,16 +3146,7 @@ def render_custom_sidebar():
         key="custom_rooms_editor",
     )
 
-    # Ustun turiga qarab alohida to'ldirish - butun jadvalga fillna(0) qilinsa
-    # matn ustunlari (nomi/turi/tomon/tekislash) buzilib "0" ga aylanib qolar edi.
-    for c in ["name"]:
-        edited[c] = edited[c].fillna("").astype(str)
-    for c, default_val in (("type", "Boshqa"), ("tomon", "O'ng"), ("tekislash", "Boshiga")):
-        edited[c] = edited[c].fillna(default_val)
-    for c in ["w", "d", "h", "bog'lanish_id", "oraliq", "x", "z"]:
-        edited[c] = pd.to_numeric(edited[c], errors="coerce").fillna(0.0)
-    edited["bog'lanish_id"] = edited["bog'lanish_id"].astype(int)
-
+    edited = _normalize_rooms_df(edited)
     st.session_state["custom_rooms"] = edited.to_dict("records")
     st.markdown("</div>", unsafe_allow_html=True)
 
